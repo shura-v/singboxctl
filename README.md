@@ -47,12 +47,13 @@ If `sing-box` is not available yet, the app will show an error with installation
 
 The current TUI includes:
 
-- `Connect`
-- `Select & Apply`
+- `Connect in terminal`
+- `Select connection and profile`
 - `Connections`
 - `Profiles`
 - `Rule Sets`
-- `Service`
+- `Logs`
+- `Auto-start in background`
 
 ## Notes
 
@@ -60,6 +61,7 @@ The current TUI includes:
 - `Rule Sets` store named groups of rules. The rule-set file name is the source of truth for the rule-set name.
 - Supported rule formats are currently `domain:...`, `domain_suffix:...`, and `ip_cidr:...`.
 - `Profiles` select which rule sets should be active.
-- `Select & Apply` validates the selected connection with the built-in VLESS parser and writes a generated TUN config to `~/.config/singboxctl/config.json`.
-- `Connect` starts `sing-box` in the foreground using the currently applied `~/.config/singboxctl/config.json`.
-- `Service` installs or removes a `launchd` daemon for starting `sing-box` at boot.
+- `Select connection and profile` validates the selected connection with the built-in VLESS parser, writes a generated TUN config to `~/.config/singboxctl/config.json`, and refreshes the running service when needed.
+- `Connect in terminal` starts `sing-box` in the foreground using the currently applied `~/.config/singboxctl/config.json` and prints logs in the current terminal. This is mainly useful for debugging.
+- `Logs` opens or clears `/var/log/singboxctl.log` and lets you change the `sing-box` log level.
+- `Auto-start in background` enables or disables running `sing-box` in the background now and on future startups.

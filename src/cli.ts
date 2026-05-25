@@ -20,6 +20,7 @@ export function cancelWithMessage(message: string): never {
 }
 
 export type SelectOption<T extends string> = {
+  disabled?: boolean;
   hint?: string;
   label: string;
   value: T;

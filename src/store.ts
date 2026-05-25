@@ -19,6 +19,8 @@ export type RuleSetRecord = {
   rules: string[];
 };
 
+export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal" | "panic";
+
 type StoredRuleSetRecord = {
   rules: string[];
 };
@@ -27,6 +29,7 @@ type AppState = {
   activeConnectionName?: string;
   activeProfileName?: string;
   ipv6Enabled?: boolean;
+  logLevel?: LogLevel;
   serviceIntent?: boolean;
 };
 
@@ -412,6 +415,22 @@ export async function setIpv6Enabled(enabled: boolean): Promise<boolean> {
 
 export async function getIpv6Enabled(): Promise<boolean> {
   return (await readState()).ipv6Enabled === true;
+}
+
+export async function setLogLevel(level: LogLevel): Promise<boolean> {
+  const state = await readState();
+  state.logLevel = level;
+  await writeState(state);
+
+  if (!state.activeConnectionName || !state.activeProfileName) {
+    return false;
+  }
+
+  return rebuildGeneratedConfigForActiveSelection();
+}
+
+export async function getLogLevel(): Promise<LogLevel> {
+  return (await readState()).logLevel ?? "error";
 }
 
 export async function rebuildGeneratedConfigForActiveSelection(): Promise<boolean> {

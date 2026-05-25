@@ -5,8 +5,10 @@ import {
   getConnection,
   getGeneratedConfigPath,
   getIpv6Enabled,
+  getLogLevel,
   getProfile,
   getRuleSet,
+  type LogLevel,
   type ConnectionRecord,
   type ProfileRecord
 } from "./store.js";
@@ -52,7 +54,8 @@ export type SingBoxConfig = {
     type: "tun";
   }>;
   log: {
-    level: "error";
+    level: LogLevel;
+    timestamp: true;
   };
   outbounds: Array<Record<string, unknown>>;
   route: {
@@ -83,7 +86,7 @@ export async function buildSingBoxConfig(
   profile: ProfileRecord
 ): Promise<SingBoxConfig> {
   const proxyOutbound = parseVlessUriToSingBoxOutbound(connection.uri);
-  const ipv6Enabled = await getIpv6Enabled();
+  const [ipv6Enabled, logLevel] = await Promise.all([getIpv6Enabled(), getLogLevel()]);
   const profileRules = profile.builtIn ? [] : await readProfileRules(profile);
   const rules = [
     { action: "sniff" } as const,
@@ -94,7 +97,8 @@ export async function buildSingBoxConfig(
 
   return {
     log: {
-      level: "error"
+      level: logLevel,
+      timestamp: true
     },
     dns: {
       servers: [

@@ -5,9 +5,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { ensureDataDirectories, getGeneratedConfigPath } from "./store.js";
 import {
   buildLaunchDaemonPlist,
+  clearServiceLogs,
   disableServiceIfInstalled,
   getServiceStatus,
   installService,
+  openServiceLogs,
   restartServiceIfInstalled,
   stopServiceIfInstalled
 } from "./service.js";
@@ -21,6 +23,7 @@ describe("service module", () => {
     const plist = buildLaunchDaemonPlist("/opt/homebrew/bin/sing-box", "/Users/test/.config/singboxctl/config.json");
 
     expect(plist).toContain("<string>/opt/homebrew/bin/sing-box</string>");
+    expect(plist).toContain("<string>--disable-color</string>");
     expect(plist).toContain("<string>/Users/test/.config/singboxctl/config.json</string>");
     expect(plist).toContain("<key>RunAtLoad</key>");
   });
@@ -37,7 +40,8 @@ describe("service module", () => {
         calls.push({ command, args });
       },
       async () => "/opt/homebrew/bin/sing-box",
-      () => false
+      () => false,
+      async () => false
     );
 
     expect(result.configPath).toBe(configPath);
@@ -86,7 +90,8 @@ describe("service module", () => {
           }
         },
         async () => "/opt/homebrew/bin/sing-box",
-        () => false
+        () => false,
+        async () => false
       )
     ).rejects.toThrow("bootstrap failed");
 
@@ -123,7 +128,12 @@ describe("service module", () => {
   });
 
   it("reports a missing service as not installed", async () => {
-    const status = await getServiceStatus(async () => {}, async () => ({ code: 1, stderr: "", stdout: "" }), () => false);
+    const status = await getServiceStatus(
+      async () => {},
+      async () => ({ code: 1, stderr: "", stdout: "" }),
+      () => false,
+      async () => false
+    );
 
     expect(status).toMatchObject({
       installed: false,
@@ -131,6 +141,59 @@ describe("service module", () => {
       label: "io.shura.singboxctl",
       plistPath: "/Library/LaunchDaemons/io.shura.singboxctl.plist"
     });
+  });
+
+  it("opens the service log in Console when the log file exists", async () => {
+    const calls: Array<{ args: string[]; command: string }> = [];
+
+    await openServiceLogs(
+      async (command, args) => {
+        calls.push({ command, args });
+      },
+      async () => true
+    );
+
+    expect(calls).toEqual([
+      {
+        command: "open",
+        args: ["-a", "Console", "/var/log/singboxctl.log"]
+      }
+    ]);
+  });
+
+  it("fails clearly when the service log file is missing", async () => {
+    await expect(openServiceLogs(async () => {}, async () => false)).rejects.toThrow(
+      "Service log not found at /var/log/singboxctl.log."
+    );
+  });
+
+  it("clears the service log using a privileged truncate command", async () => {
+    const calls: Array<{ args: string[]; command: string }> = [];
+
+    await clearServiceLogs(
+      async (command, args) => {
+        calls.push({ command, args });
+      },
+      () => false,
+      async () => true
+    );
+
+    expect(calls).toEqual([
+      {
+        command: "sudo",
+        args: ["-v"]
+      },
+      {
+        command: "sudo",
+        args: ["truncate", "-s", "0", "/var/log/singboxctl.log"]
+      }
+    ]);
+  });
+
+  it("fails clearly when clearing a missing service log file", async () => {
+    await expect(clearServiceLogs(async () => {}, () => false, async () => false)).rejects.toThrow(
+      "Service log not found at /var/log/singboxctl.log."
+    );
   });
 
   it("does not restart a missing service", async () => {

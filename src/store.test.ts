@@ -16,6 +16,7 @@ import {
   getDataDirectoryPath,
   getGeneratedConfigPath,
   getIpv6Enabled,
+  getLogLevel,
   getServiceIntent,
   listConnections,
   listProfiles,
@@ -27,6 +28,7 @@ import {
   setProfileRuleSets,
   setActiveSelection,
   setIpv6Enabled,
+  setLogLevel,
   setServiceIntent,
   setRulesForRuleSet,
   updateConnection
@@ -83,6 +85,16 @@ describe("store", () => {
 
     await setIpv6Enabled(false);
     expect(await getIpv6Enabled()).toBe(false);
+  });
+
+  it("stores the selected log level in state", async () => {
+    expect(await getLogLevel()).toBe("error");
+
+    await setLogLevel("debug");
+    expect(await getLogLevel()).toBe("debug");
+
+    await setLogLevel("warn");
+    expect(await getLogLevel()).toBe("warn");
   });
 
   it("preserves the active connection when only the active profile changes", async () => {

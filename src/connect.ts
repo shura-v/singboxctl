@@ -36,13 +36,13 @@ export function buildSingBoxRunInvocation(configPath: string, singBoxPath: strin
   if (typeof process.getuid === "function" && process.getuid() === 0) {
     return {
       command: singBoxPath,
-      args: ["run", "-c", configPath]
+      args: ["run", "--disable-color", "-c", configPath]
     };
   }
 
   return {
     command: "sudo",
-    args: [singBoxPath, "run", "-c", configPath]
+    args: [singBoxPath, "run", "--disable-color", "-c", configPath]
   };
 }
 

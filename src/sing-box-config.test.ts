@@ -11,6 +11,7 @@ import {
   addRulesToRuleSet,
   getGeneratedConfigPath,
   setIpv6Enabled,
+  setLogLevel,
   setProfileRuleSets
 } from "./store.js";
 
@@ -64,13 +65,22 @@ describe("sing-box config builder", () => {
         ip_cidr: ["1.2.3.0/24"]
       }
     ]);
+    expect(result.config.log).toEqual({
+      level: "error",
+      timestamp: true
+    });
 
     const writtenConfig = JSON.parse(await readFile(result.configPath, "utf8")) as {
       dns: { final: string; servers: Array<{ tag: string; type: string }> };
       inbounds: Array<{ tag: string; type: string }>;
+      log: { level: string; timestamp: boolean };
       outbounds: Array<{ tag: string; type: string }>;
     };
 
+    expect(writtenConfig.log).toEqual({
+      level: "error",
+      timestamp: true
+    });
     expect(writtenConfig.dns).toEqual({
       final: "local-dns",
       servers: [
@@ -172,5 +182,25 @@ describe("sing-box config builder", () => {
         stack: "system"
       }
     ]);
+  });
+
+  it("uses the selected log level in the generated config", async () => {
+    await addConnection("Work", VALID_VLESS_URI);
+    await addProfile("Office");
+    await setLogLevel("debug");
+
+    const result = await buildAndWriteGeneratedConfig("work", "office");
+    const writtenConfig = JSON.parse(await readFile(result.configPath, "utf8")) as {
+      log: { level: string; timestamp: boolean };
+    };
+
+    expect(result.config.log).toEqual({
+      level: "debug",
+      timestamp: true
+    });
+    expect(writtenConfig.log).toEqual({
+      level: "debug",
+      timestamp: true
+    });
   });
 });

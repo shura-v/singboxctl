@@ -5,8 +5,8 @@ import { runConnectFlow } from "./tui/connect.js";
 import { runIpv6Menu } from "./tui/ipv6.js";
 import { runRootMenuLoop } from "./tui/menu-loop.js";
 import { runConnectionsMenu } from "./tui/connections.js";
+import { runLogsMenu } from "./tui/logs.js";
 import { runProfilesMenu } from "./tui/profiles.js";
-import { runRebuildConfigFlow } from "./tui/rebuild-config.js";
 import { runRulesMenu } from "./tui/rules.js";
 import { runSelectAndApplyFlow } from "./tui/select-and-apply.js";
 import { runServiceMenu } from "./tui/service.js";
@@ -16,9 +16,12 @@ type MenuAction =
   | "connections"
   | "exit"
   | "ipv6"
+  | "logs"
   | "profiles"
-  | "rebuild-config"
   | "rule-sets"
+  | "section-run"
+  | "section-manage"
+  | "section-system"
   | "select-and-apply"
   | "service";
 
@@ -34,25 +37,32 @@ export async function runTui(): Promise<void> {
       return promptSelect<MenuAction>(
         [
           {
+            value: "section-run",
+            label: "———— Runtime ————",
+            disabled: true
+          },
+          {
+            value: "service",
+            label: "Auto-start in background",
+            hint: "Run sing-box in the background now and on future startups"
+          },
+          {
             value: "connect",
-            label: "Connect",
-            hint: "Start sing-box using the currently applied config.json"
+            label: "Connect in terminal",
+            hint: "Debug mode: run in foreground and show logs in this terminal"
+          },
+          {
+            value: "section-manage",
+            label: "———— Manage ————",
+            disabled: true
           },
           {
             value: "select-and-apply",
-            label: "Select & Apply",
+            label: "Select connection and profile",
             hint:
               activeConnectionName && activeProfileName
                 ? `${activeConnectionName} + ${activeProfileName}`
                 : "Choose a connection and a profile"
-          },
-          {
-            value: "rebuild-config",
-            label: "Rebuild config",
-            hint:
-              activeConnectionName && activeProfileName
-                ? `Regenerate config.json for ${activeConnectionName} + ${activeProfileName}`
-                : "Regenerate config.json for the current active selection"
           },
           {
             value: "connections",
@@ -75,9 +85,14 @@ export async function runTui(): Promise<void> {
             hint: "Manage named sing-box rule groups"
           },
           {
-            value: "service",
-            label: "Service",
-            hint: "Install or remove a launchd service for startup"
+            value: "section-system",
+            label: "———— System ————",
+            disabled: true
+          },
+          {
+            value: "logs",
+            label: "Logs",
+            hint: "Open or clear the launchd service log"
           },
           {
             value: "exit",
@@ -95,9 +110,6 @@ export async function runTui(): Promise<void> {
         case "select-and-apply":
           await runSelectAndApplyFlow();
           return "continue";
-        case "rebuild-config":
-          await runRebuildConfigFlow();
-          return "continue";
         case "connections":
           await runConnectionsMenu();
           return "continue";
@@ -109,6 +121,13 @@ export async function runTui(): Promise<void> {
           return "continue";
         case "rule-sets":
           await runRulesMenu();
+          return "continue";
+        case "section-run":
+        case "section-manage":
+        case "section-system":
+          return "continue";
+        case "logs":
+          await runLogsMenu();
           return "continue";
         case "service":
           await runServiceMenu();

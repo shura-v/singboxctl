@@ -33,19 +33,48 @@ export function getServiceLabel(): string {
   return SERVICE_LABEL;
 }
 
+export function getServiceLogPath(): string {
+  return SERVICE_LOG_PATH;
+}
+
 export function getServicePlistPath(): string {
   return SERVICE_PLIST_PATH;
+}
+
+export async function openServiceLogs(
+  streamingRunner: StreamingRunner = runCommandStreaming,
+  fileExistsChecker: FileExistsChecker = fileExists
+): Promise<void> {
+  if (!(await fileExistsChecker(SERVICE_LOG_PATH))) {
+    throw new FriendlyMessageError(`Service log not found at ${SERVICE_LOG_PATH}.`);
+  }
+
+  await streamingRunner("open", ["-a", "Console", SERVICE_LOG_PATH]);
+}
+
+export async function clearServiceLogs(
+  streamingRunner: StreamingRunner = runCommandStreaming,
+  isRoot: IsRoot = isProcessRoot,
+  fileExistsChecker: FileExistsChecker = fileExists
+): Promise<void> {
+  if (!(await fileExistsChecker(SERVICE_LOG_PATH))) {
+    throw new FriendlyMessageError(`Service log not found at ${SERVICE_LOG_PATH}.`);
+  }
+
+  await ensureSudoSession(streamingRunner, isRoot);
+  await runPrivilegedStreaming("truncate", ["-s", "0", SERVICE_LOG_PATH], streamingRunner, isRoot);
 }
 
 export async function installService(
   streamingRunner: StreamingRunner = runCommandStreaming,
   pathResolver: PathResolver = resolveCommandPath,
-  isRoot: IsRoot = isProcessRoot
+  isRoot: IsRoot = isProcessRoot,
+  fileExistsChecker: FileExistsChecker = fileExists
 ): Promise<ServiceInstallResult> {
   const configPath = getGeneratedConfigPath();
   await assertConfigExists(configPath);
 
-  if (await fileExists(SERVICE_PLIST_PATH)) {
+  if (await fileExistsChecker(SERVICE_PLIST_PATH)) {
     throw new FriendlyMessageError("Service is already installed.");
   }
 
@@ -109,9 +138,10 @@ export async function uninstallService(
 export async function getServiceStatus(
   streamingRunner: StreamingRunner = runCommandStreaming,
   captureRunner: CaptureRunner = runCommandCapture,
-  isRoot: IsRoot = isProcessRoot
+  isRoot: IsRoot = isProcessRoot,
+  fileExistsChecker: FileExistsChecker = fileExists
 ): Promise<ServiceStatus> {
-  const installed = await fileExists(SERVICE_PLIST_PATH);
+  const installed = await fileExistsChecker(SERVICE_PLIST_PATH);
   let loaded = false;
 
   if (installed) {
@@ -212,6 +242,7 @@ export function buildLaunchDaemonPlist(singBoxPath: string, configPath: string):
   <array>
     <string>${escapedSingBoxPath}</string>
     <string>run</string>
+    <string>--disable-color</string>
     <string>-c</string>
     <string>${escapedConfigPath}</string>
   </array>
