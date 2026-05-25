@@ -1,0 +1,32 @@
+{
+  "name": "singboxctl",
+  "version": "0.1.0",
+  "author": "Shura Vlasov",
+  "description": "Minimal CLI scaffold for sing-box on macOS.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.17"
+  },
+  "bin": {
+    "singboxctl": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "npm run build && node dist/index.js",
+    "prepack": "npm run build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
