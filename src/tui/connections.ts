@@ -1,11 +1,11 @@
-import { cancel, log } from "@clack/prompts";
+import { log } from "@clack/prompts";
 import { FriendlyMessageError, promptSelect, promptText } from "../cli.js";
-import { runCommandCapture } from "../process.js";
-import { addConnection, listConnections, removeConnection } from "../store.js";
+import { addConnection, listConnections, removeConnection, updateConnection } from "../store.js";
+import { validateConnectionUri } from "../vless-uri/index.js";
 import { runChildMenuLoop } from "./menu-loop.js";
 import { readConnectionNameDefault, requiredText, truncate } from "./shared.js";
 
-type ConnectionsAction = "add" | "back" | "remove";
+type ConnectionsAction = "add" | "back" | "edit" | "remove";
 
 export async function runConnectionsMenu(): Promise<void> {
   await runChildMenuLoop<ConnectionsAction>({
@@ -25,6 +25,11 @@ export async function runConnectionsMenu(): Promise<void> {
             hint: connections.length > 0 ? `${connections.length} saved` : "No saved connections yet"
           },
           {
+            value: "edit",
+            label: "Edit",
+            hint: connections.length > 0 ? "Update a saved connection" : "No saved connections yet"
+          },
+          {
             value: "back",
             label: "Back"
           }
@@ -40,6 +45,9 @@ export async function runConnectionsMenu(): Promise<void> {
         case "remove":
           await runConnectionsRemove();
           return "continue";
+        case "edit":
+          await runConnectionsEdit();
+          return "continue";
         case "back":
           return "back";
       }
@@ -53,7 +61,11 @@ async function runConnectionsAdd(): Promise<void> {
     placeholder: "vless://...",
     validate: requiredText("Connection URI is required.")
   });
-  await validateConnectionUri(uri);
+  const warnings = await validateConnectionUri(uri);
+
+  for (const warning of warnings) {
+    log.warn(warning);
+  }
 
   const name = await promptText({
     message: "Connection name",
@@ -66,26 +78,49 @@ async function runConnectionsAdd(): Promise<void> {
   log.success(`Saved connection "${connection.name}".`);
 }
 
-async function validateConnectionUri(uri: string): Promise<void> {
-  const result = await runCommandCapture("vpnparser", ["s", uri]);
+async function runConnectionsEdit(): Promise<void> {
+  const connections = await listConnections();
 
-  if (result.code === 0) {
-    return;
+  if (connections.length === 0) {
+    throw new FriendlyMessageError("No saved connections to edit.");
   }
 
-  throw new FriendlyMessageError(formatVpnparserFailure(result.stderr, result.stdout));
-}
+  const currentName = await promptSelect(
+    connections.map((connection) => ({
+      value: connection.name,
+      label: connection.name,
+      hint: truncate(connection.uri, 80)
+    })),
+    "Choose a connection to edit"
+  );
 
-export function formatVpnparserFailure(stderr: string, stdout: string): string {
-  const stderrText = stderr.trim();
-  const stdoutText = stdout.trim();
-  const combinedText = [stderrText, stdoutText].filter((value) => value.length > 0).join("\n");
+  const connection = connections.find((item) => item.name === currentName);
 
-  if (combinedText.includes("panic:")) {
-    return "vpnparser crashed while parsing this URI. Check that it is a valid Xray-compatible URI.";
+  if (!connection) {
+    throw new FriendlyMessageError(`Connection "${currentName}" does not exist.`);
   }
 
-  return stderrText || stdoutText || "vpnparser failed to parse the URI.";
+  const uri = await promptText({
+    message: "Connection URI",
+    placeholder: "vless://...",
+    initialValue: connection.uri,
+    validate: requiredText("Connection URI is required.")
+  });
+  const warnings = await validateConnectionUri(uri);
+
+  for (const warning of warnings) {
+    log.warn(warning);
+  }
+
+  const name = await promptText({
+    message: "Connection name",
+    placeholder: "work-vless",
+    initialValue: connection.name,
+    validate: requiredText("Connection name is required.")
+  });
+
+  const updatedConnection = await updateConnection(currentName, name, uri);
+  log.success(`Updated connection "${updatedConnection.name}".`);
 }
 
 async function runConnectionsRemove(): Promise<void> {
@@ -104,6 +139,14 @@ async function runConnectionsRemove(): Promise<void> {
     "Choose a connection to remove"
   );
 
-  await removeConnection(name);
+  const result = await removeConnection(name);
   log.success(`Removed connection "${name}".`);
+
+  if (result.clearedActiveConnection) {
+    log.warn('Removed the active connection from the current selection and deleted config.json.');
+
+    if (result.stoppedService) {
+      log.warn("Stopped the launchd service because it was using the deleted active selection.");
+    }
+  }
 }

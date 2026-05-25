@@ -1,6 +1,8 @@
 # singboxctl
 
-`singboxctl` is a macOS TUI for managing:
+`singboxctl` currently supports macOS only.
+
+`singboxctl` is a TUI for managing:
 
 - Xray-compatible connection URIs
 - routing profiles
@@ -18,23 +20,12 @@ npm install -g singboxctl
 
 ### macOS
 
-Required:
-
-- Homebrew
-
-Install runtime dependencies with:
+- Install Homebrew: https://brew.sh/
+- Install `sing-box` with:
 
 ```bash
-singboxctl install-mac-deps
+brew install sing-box
 ```
-
-This command installs:
-
-- `go`
-- `sing-box`
-- `vpnparser`
-
-After installation, `singboxctl` will tell you which Go bin directory to add to your `PATH`, for example `~/go/bin`.
 
 ## Run
 
@@ -44,25 +35,31 @@ Start the TUI with:
 singboxctl
 ```
 
-If `sing-box` or `vpnparser` are not available yet, the app will show an error telling you to run:
+Or start `sing-box` directly with the currently applied config:
 
 ```bash
-singboxctl install-mac-deps
+singboxctl connect
 ```
+
+If `sing-box` is not available yet, the app will show an error with installation hints.
 
 ## Current Menu
 
 The current TUI includes:
 
 - `Connect`
-- `Disconnect`
+- `Select & Apply`
 - `Connections`
 - `Profiles`
-- `Rules`
+- `Rule Sets`
+- `Service`
 
 ## Notes
 
 - `Connections` store raw Xray-compatible URIs.
-- `Rules` are stored per profile.
-- `Rules -> Add` uses a multiline prompt and expects one rule per line.
-- `singboxctl` currently supports macOS only.
+- `Rule Sets` store named groups of rules. The rule-set file name is the source of truth for the rule-set name.
+- Supported rule formats are currently `domain:...`, `domain_suffix:...`, and `ip_cidr:...`.
+- `Profiles` select which rule sets should be active.
+- `Select & Apply` validates the selected connection with the built-in VLESS parser and writes a generated TUN config to `~/.config/singboxctl/config.json`.
+- `Connect` starts `sing-box` in the foreground using the currently applied `~/.config/singboxctl/config.json`.
+- `Service` installs or removes a `launchd` daemon for starting `sing-box` at boot.

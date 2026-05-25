@@ -1,39 +1,57 @@
 import { log } from "@clack/prompts";
-import { FriendlyMessageError, promptMultiSelect, promptMultiline, promptSelect } from "../cli.js";
-import { addDomainsToProfile, listProfiles, removeRulesFromProfile } from "../store.js";
+import { FriendlyMessageError, promptConfirm, promptMultiline, promptSelect, promptText } from "../cli.js";
+import { runCommandStreaming } from "../process.js";
+import {
+  createRuleSet,
+  getRuleSet,
+  getRuleSetFilePath,
+  listRuleSets,
+  rebuildGeneratedConfigForActiveSelection,
+  removeRuleSet,
+  setRulesForRuleSet
+} from "../store.js";
 import { runChildMenuLoop } from "./menu-loop.js";
+import { requiredText } from "./shared.js";
 
-type RulesAction = "add" | "back" | "remove";
+type RuleSetsAction = "add" | "back" | "edit" | "remove";
 
 export async function runRulesMenu(): Promise<void> {
-  await runChildMenuLoop<RulesAction>({
+  await runChildMenuLoop<RuleSetsAction>({
     select: () =>
-      promptSelect<RulesAction>(
+      promptSelect<RuleSetsAction>(
         [
           {
             value: "add",
             label: "Add",
-            hint: "Add one or more sing-box match rules to a profile"
+            hint: "Create a new named rule set and define its rules"
+          },
+          {
+            value: "edit",
+            label: "Edit",
+            hint: "Edit the full rules list of an existing rule set"
           },
           {
             value: "remove",
             label: "Remove",
-            hint: "Remove one or more rules from a profile"
+            hint: "Delete an existing rule set"
           },
           {
             value: "back",
             label: "Back"
           }
         ],
-        "Rules"
+        "Rule Sets"
       ),
     onSelect: async (action) => {
       switch (action) {
         case "add":
-          await runRulesAdd();
+          await runRuleSetsAdd();
+          return "continue";
+        case "edit":
+          await runRuleSetsEdit();
           return "continue";
         case "remove":
-          await runRulesRemove();
+          await runRuleSetsRemove();
           return "continue";
         case "back":
           return "back";
@@ -42,22 +60,85 @@ export async function runRulesMenu(): Promise<void> {
   });
 }
 
-async function runRulesAdd(): Promise<void> {
-  const profiles = await listProfiles();
+async function runRuleSetsAdd(): Promise<void> {
+  const name = await promptText({
+    message: "Rule set name",
+    placeholder: "google",
+    validate: requiredText("Rule set name is required.")
+  });
 
-  if (profiles.length === 0) {
-    throw new FriendlyMessageError("Create a profile before adding rules.");
+  const rules = await promptRules("");
+  const ruleSet = await createRuleSet(name, rules);
+  log.success(`Created rule set "${ruleSet.name}".`);
+}
+
+async function runRuleSetsEdit(): Promise<void> {
+  const ruleSets = await listRuleSets();
+
+  if (ruleSets.length === 0) {
+    throw new FriendlyMessageError("Create a rule set before editing it.");
   }
 
-  const profileName = await promptSelect(
-    profiles.map((profile) => ({
-      value: profile.name,
-      label: profile.name,
-      hint: profile.domains.length > 0 ? `${profile.domains.length} rules` : "No rules yet"
+  const ruleSetName = await promptSelect(
+    ruleSets.map((ruleSet) => ({
+      value: ruleSet.name,
+      label: ruleSet.name,
+      hint: ruleSet.rules.length > 0 ? `${ruleSet.rules.length} rules` : "No rules yet"
     })),
-    "Choose a profile"
+    "Choose a rule set"
   );
 
+  const ruleSet = ruleSets.find((item) => item.name === ruleSetName);
+
+  if (!ruleSet) {
+    throw new FriendlyMessageError(`Rule set "${ruleSetName}" does not exist.`);
+  }
+
+  await runCommandStreaming("open", [getRuleSetFilePath(ruleSet.name)]);
+  log.success(`Opened rule set "${ruleSetName}".`);
+
+  const editFinished = await promptConfirm({
+    message: "Finished editing the rule set? Press Enter to confirm.",
+    initialValue: true
+  });
+
+  if (!editFinished) {
+    log.info("Skipped config rebuild.");
+    return;
+  }
+
+  await getRuleSet(ruleSetName);
+
+  const rebuilt = await rebuildGeneratedConfigForActiveSelection();
+
+  if (rebuilt) {
+    log.success("Rebuilt config.json from the active selection.");
+  } else {
+    log.info("No active selection to rebuild.");
+  }
+}
+
+async function runRuleSetsRemove(): Promise<void> {
+  const ruleSets = await listRuleSets();
+
+  if (ruleSets.length === 0) {
+    throw new FriendlyMessageError("No rule sets to remove.");
+  }
+
+  const ruleSetName = await promptSelect(
+    ruleSets.map((ruleSet) => ({
+      value: ruleSet.name,
+      label: ruleSet.name,
+      hint: ruleSet.rules.length > 0 ? `${ruleSet.rules.length} rules` : "No rules yet"
+    })),
+    "Choose a rule set to remove"
+  );
+
+  await removeRuleSet(ruleSetName);
+  log.success(`Removed rule set "${ruleSetName}".`);
+}
+
+async function promptRules(initialValue: string): Promise<string> {
   log.info("Enter rules one per line.");
   log.info("Supported formats:");
   log.step("domain:google.com for an exact domain");
@@ -66,57 +147,10 @@ async function runRulesAdd(): Promise<void> {
   log.step("ip_cidr:1.2.3.0/24 for a subnet");
   log.step("Press Tab to focus [ submit ], then press Enter.");
 
-  const rawInput = await promptMultiline({
+  return promptMultiline({
     message: "Rules",
     placeholder: "domain:google.com\ndomain_suffix:google.com\nip_cidr:1.2.3.0/24",
+    initialValue,
     showSubmit: true
   });
-
-  const added = await addDomainsToProfile(profileName, rawInput);
-
-  if (added.length === 0) {
-    log.step("No new rules were added.");
-    return;
-  }
-
-  log.success(`Added ${added.length} rule entr${added.length === 1 ? "y" : "ies"} to "${profileName}".`);
-}
-
-async function runRulesRemove(): Promise<void> {
-  const profiles = await listProfiles();
-
-  if (profiles.length === 0) {
-    throw new FriendlyMessageError("Create a profile before removing rules.");
-  }
-
-  const profileName = await promptSelect(
-    profiles.map((profile) => ({
-      value: profile.name,
-      label: profile.name,
-      hint: profile.domains.length > 0 ? `${profile.domains.length} rules` : "No rules yet"
-    })),
-    "Choose a profile"
-  );
-
-  const profile = profiles.find((item) => item.name === profileName);
-
-  if (!profile || profile.domains.length === 0) {
-    throw new FriendlyMessageError(`Profile "${profileName}" has no rules to remove.`);
-  }
-
-  const selectedRules = await promptMultiSelect(
-    profile.domains.map((rule) => ({
-      value: rule,
-      label: rule
-    })),
-    "Choose rules to remove"
-  );
-
-  if (selectedRules.length === 0) {
-    log.step("No rules selected.");
-    return;
-  }
-
-  const removedRules = await removeRulesFromProfile(profileName, selectedRules);
-  log.success(`Removed ${removedRules.length} rule entr${removedRules.length === 1 ? "y" : "ies"} from "${profileName}".`);
 }

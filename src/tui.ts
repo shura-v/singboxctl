@@ -1,14 +1,26 @@
 import { outro } from "@clack/prompts";
 import { promptSelect } from "./cli.js";
-import { ensureDataDirectories, getActiveConnectionName, getActiveProfileName } from "./store.js";
+import { ensureDataDirectories, getActiveConnectionName, getActiveProfileName, getIpv6Enabled } from "./store.js";
 import { runConnectFlow } from "./tui/connect.js";
-import { runDisconnectFlow } from "./tui/disconnect.js";
+import { runIpv6Menu } from "./tui/ipv6.js";
 import { runRootMenuLoop } from "./tui/menu-loop.js";
 import { runConnectionsMenu } from "./tui/connections.js";
 import { runProfilesMenu } from "./tui/profiles.js";
+import { runRebuildConfigFlow } from "./tui/rebuild-config.js";
 import { runRulesMenu } from "./tui/rules.js";
+import { runSelectAndApplyFlow } from "./tui/select-and-apply.js";
+import { runServiceMenu } from "./tui/service.js";
 
-type MenuAction = "connect" | "connections" | "disconnect" | "exit" | "profiles" | "rules";
+type MenuAction =
+  | "connect"
+  | "connections"
+  | "exit"
+  | "ipv6"
+  | "profiles"
+  | "rebuild-config"
+  | "rule-sets"
+  | "select-and-apply"
+  | "service";
 
 export async function runTui(): Promise<void> {
   await ensureDataDirectories();
@@ -17,24 +29,30 @@ export async function runTui(): Promise<void> {
     select: async () => {
       const activeConnectionName = await getActiveConnectionName();
       const activeProfileName = await getActiveProfileName();
+      const ipv6Enabled = await getIpv6Enabled();
 
       return promptSelect<MenuAction>(
         [
           {
             value: "connect",
             label: "Connect",
+            hint: "Start sing-box using the currently applied config.json"
+          },
+          {
+            value: "select-and-apply",
+            label: "Select & Apply",
             hint:
               activeConnectionName && activeProfileName
                 ? `${activeConnectionName} + ${activeProfileName}`
                 : "Choose a connection and a profile"
           },
           {
-            value: "disconnect",
-            label: "Disconnect",
+            value: "rebuild-config",
+            label: "Rebuild config",
             hint:
-              activeConnectionName || activeProfileName
-                ? "Clear the current connection/profile selection"
-                : "No active selection"
+              activeConnectionName && activeProfileName
+                ? `Regenerate config.json for ${activeConnectionName} + ${activeProfileName}`
+                : "Regenerate config.json for the current active selection"
           },
           {
             value: "connections",
@@ -47,9 +65,19 @@ export async function runTui(): Promise<void> {
             hint: "Manage routing profiles"
           },
           {
-            value: "rules",
-            label: "Rules",
-            hint: "Manage sing-box match rules for profiles"
+            value: "ipv6",
+            label: "IPv6",
+            hint: ipv6Enabled ? "Enabled for TUN inbounds" : "Disabled for TUN inbounds"
+          },
+          {
+            value: "rule-sets",
+            label: "Rule Sets",
+            hint: "Manage named sing-box rule groups"
+          },
+          {
+            value: "service",
+            label: "Service",
+            hint: "Install or remove a launchd service for startup"
           },
           {
             value: "exit",
@@ -64,8 +92,11 @@ export async function runTui(): Promise<void> {
         case "connect":
           await runConnectFlow();
           return "continue";
-        case "disconnect":
-          await runDisconnectFlow();
+        case "select-and-apply":
+          await runSelectAndApplyFlow();
+          return "continue";
+        case "rebuild-config":
+          await runRebuildConfigFlow();
           return "continue";
         case "connections":
           await runConnectionsMenu();
@@ -73,8 +104,14 @@ export async function runTui(): Promise<void> {
         case "profiles":
           await runProfilesMenu();
           return "continue";
-        case "rules":
+        case "ipv6":
+          await runIpv6Menu();
+          return "continue";
+        case "rule-sets":
           await runRulesMenu();
+          return "continue";
+        case "service":
+          await runServiceMenu();
           return "continue";
         case "exit":
           outro("Bye.");

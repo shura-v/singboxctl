@@ -3,7 +3,8 @@
 import { createRequire } from "node:module";
 import { intro } from "@clack/prompts";
 import { cancelWithMessage, failAndExit } from "./cli.js";
-import { assertMacRuntimeDependenciesInstalled, ensureMacOS, runInstallMacDependencies } from "./install-mac-dependencies.js";
+import { connect } from "./connect.js";
+import { assertMacRuntimePrerequisitesInstalled, ensureMacOS } from "./platform.js";
 import { runTui } from "./tui.js";
 
 const require = createRequire(import.meta.url);
@@ -14,23 +15,20 @@ async function main(): Promise<void> {
 
   intro(`singboxctl v${version}`);
 
-  if (isInstallDependenciesInvocation(args)) {
-    await runInstallMacDependencies();
-    return;
-  }
+  ensureMacOS();
+  await assertMacRuntimePrerequisitesInstalled();
 
   if (args.length === 0) {
-    ensureMacOS();
-    await assertMacRuntimeDependenciesInstalled();
     await runTui();
     return;
   }
 
-  cancelWithMessage('Use "singboxctl install-mac-deps" or start without arguments to open the menu.');
-}
+  if (args.length === 1 && args[0] === "connect") {
+    await connect();
+    return;
+  }
 
-function isInstallDependenciesInvocation(args: string[]): args is ["install-mac-deps"] {
-  return args.length === 1 && args[0] === "install-mac-deps";
+  cancelWithMessage('Use "singboxctl" for the menu or "singboxctl connect" to start sing-box.');
 }
 
 void main().catch((error: unknown) => {

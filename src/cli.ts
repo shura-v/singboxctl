@@ -1,4 +1,4 @@
-import { cancel, isCancel, log, multiline, multiselect, select, text } from "@clack/prompts";
+import { cancel, confirm, isCancel, log, multiline, multiselect, select, text } from "@clack/prompts";
 
 export class PromptCancelledError extends Error {
   constructor() {
@@ -57,11 +57,13 @@ export async function promptSelect<T extends string>(
 
 export async function promptMultiSelect<T extends string>(
   options: SelectOption<T>[],
-  message: string
+  message: string,
+  initialValues?: T[]
 ): Promise<T[]> {
   const result = await multiselect({
     message,
     options: options as Parameters<typeof multiselect<T>>[0]["options"],
+    initialValues,
     required: false
   });
 
@@ -84,6 +86,18 @@ export async function promptMultiline(options: {
   });
 
   return unwrapPrompt(result) ?? "";
+}
+
+export async function promptConfirm(options: {
+  initialValue?: boolean;
+  message: string;
+}): Promise<boolean> {
+  const result = await confirm({
+    initialValue: options.initialValue,
+    message: options.message
+  });
+
+  return unwrapPrompt(result);
 }
 
 export function failAndExit(error: unknown): never {

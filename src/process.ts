@@ -63,3 +63,18 @@ export async function runCommandStreaming(command: string, args: string[]): Prom
   });
 }
 
+export async function resolveCommandPath(command: string): Promise<string> {
+  const result = await runCommandCapture("which", [command]);
+
+  if (result.code !== 0) {
+    throw new FriendlyMessageError(`Failed to resolve "${command}". Make sure it is installed and available in PATH.`);
+  }
+
+  const resolvedPath = result.stdout.trim();
+
+  if (resolvedPath.length === 0) {
+    throw new FriendlyMessageError(`Failed to resolve "${command}". Make sure it is installed and available in PATH.`);
+  }
+
+  return resolvedPath;
+}

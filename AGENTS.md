@@ -4,6 +4,6 @@
 
 - We add features sequentially in small steps.
 - Do not implement speculative functionality that was not explicitly requested.
-- Do not write custom VPN URI or config parsers in this project.
-- If we need to turn an Xray-compatible VPN URI into a config file, use the installed `vpnparser` dependency.
-- Prefer integrating with `vpnparser` over duplicating protocol parsing logic in TypeScript.
+- We currently own a narrow custom parser for the project's target Xray formats.
+- Prefer small, explicit parsers for the exact protocols and fields we support over generic "parse everything" logic.
+- If a URI/config feature is not supported by our parser yet, fail clearly instead of guessing.
