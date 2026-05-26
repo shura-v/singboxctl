@@ -3,6 +3,7 @@ import { FriendlyMessageError, promptSelect } from "../cli.js";
 import { clearServiceLogs, getServiceLogPath, openServiceLogs } from "../service.js";
 import { getLogLevel, setLogLevel, type LogLevel } from "../store.js";
 import { runChildMenuLoop } from "./menu-loop.js";
+import { runAndLogRuntimeRefresh } from "./shared.js";
 
 type LogsAction = "back" | "clear" | "open" | "set-level";
 
@@ -82,12 +83,8 @@ async function runSetLogLevel(): Promise<void> {
     throw new FriendlyMessageError(`Log level is already ${currentLogLevel}.`);
   }
 
-  const rebuilt = await setLogLevel(nextLogLevel);
-  log.success(`Set log level to ${nextLogLevel}.`);
-
-  if (rebuilt) {
-    log.info("Rebuilt config.json from the active selection.");
-  } else {
-    log.info("No active selection to rebuild.");
-  }
+  await runAndLogRuntimeRefresh({
+    run: () => setLogLevel(nextLogLevel),
+    success: () => `Set log level to ${nextLogLevel}.`
+  });
 }

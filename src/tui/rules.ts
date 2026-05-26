@@ -11,7 +11,7 @@ import {
   setRulesForRuleSet
 } from "../store.js";
 import { runChildMenuLoop } from "./menu-loop.js";
-import { requiredText } from "./shared.js";
+import { requiredText, runAndLogRuntimeRefresh } from "./shared.js";
 
 type RuleSetsAction = "add" | "back" | "edit" | "remove";
 
@@ -109,13 +109,9 @@ async function runRuleSetsEdit(): Promise<void> {
 
   await getRuleSet(ruleSetName);
 
-  const rebuilt = await rebuildGeneratedConfigForActiveSelection();
-
-  if (rebuilt) {
-    log.success("Rebuilt config.json from the active selection.");
-  } else {
-    log.info("No active selection to rebuild.");
-  }
+  await runAndLogRuntimeRefresh({
+    run: () => rebuildGeneratedConfigForActiveSelection()
+  });
 }
 
 async function runRuleSetsRemove(): Promise<void> {

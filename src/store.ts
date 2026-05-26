@@ -1,4 +1,4 @@
-import { access, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { FriendlyMessageError } from "./cli.js";
@@ -20,6 +20,14 @@ export type RuleSetRecord = {
 };
 
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal" | "panic";
+
+type StoredConnectionRecord = {
+  uri: string;
+};
+
+type StoredProfileRecord = {
+  ruleSetNames: string[];
+};
 
 type StoredRuleSetRecord = {
   rules: string[];
@@ -51,7 +59,7 @@ export type ActiveSelectionRuntimeResult = {
   stoppedService: boolean;
 };
 
-export const FULL_TUNNEL_PROFILE_NAME = "all-traffic";
+export const FULL_TUNNEL_PROFILE_NAME = "All Traffic (built-in)";
 
 const BUILT_IN_PROFILES: ProfileRecord[] = [
   {
@@ -115,9 +123,9 @@ export async function addConnection(name: string, rawUri: string): Promise<Conne
     throw new FriendlyMessageError("Connection URI cannot be empty.");
   }
 
-  const existing = await readConnectionIfExists(normalizedName);
+  const existingName = await findStoredJsonBaseNameCaseInsensitive(getConnectionsDirectoryPath(), normalizedName);
 
-  if (existing) {
+  if (existingName) {
     throw new FriendlyMessageError(`Connection "${normalizedName}" already exists.`);
   }
 
@@ -127,7 +135,7 @@ export async function addConnection(name: string, rawUri: string): Promise<Conne
   };
 
   await ensureDataDirectories();
-  await writeJson(getConnectionPath(connection.name), connection);
+  await writeConnection(connection.name, connection.uri);
   return connection;
 }
 
@@ -145,9 +153,9 @@ export async function updateConnection(
   }
 
   if (normalizedNextName !== currentName) {
-    const existing = await readConnectionIfExists(normalizedNextName);
+    const existingName = await findStoredJsonBaseNameCaseInsensitive(getConnectionsDirectoryPath(), normalizedNextName);
 
-    if (existing) {
+    if (existingName && existingName !== connection.name) {
       throw new FriendlyMessageError(`Connection "${normalizedNextName}" already exists.`);
     }
   }
@@ -158,10 +166,17 @@ export async function updateConnection(
   };
 
   await ensureDataDirectories();
-  await writeJson(getConnectionPath(nextConnection.name), nextConnection);
+  const currentPath = getConnectionPath(connection.name);
+  const nextPath = getConnectionPath(nextConnection.name);
 
-  if (normalizedNextName !== connection.name) {
-    await rm(getConnectionPath(connection.name), { force: true });
+  if (normalizedNextName === connection.name) {
+    await writeConnection(connection.name, nextConnection.uri);
+  } else if (currentPath.toLowerCase() === nextPath.toLowerCase()) {
+    await writeConnection(connection.name, nextConnection.uri);
+    await renameFilePreservingCase(currentPath, nextPath);
+  } else {
+    await writeConnection(nextConnection.name, nextConnection.uri);
+    await rm(currentPath, { force: true });
   }
 
   const state = await readState();
@@ -176,6 +191,10 @@ export async function updateConnection(
 }
 
 export async function removeConnection(name: string): Promise<RemovalResult> {
+  if (!(await hasStoredJsonExact(getConnectionsDirectoryPath(), name))) {
+    throw new FriendlyMessageError(`Connection "${name}" does not exist.`);
+  }
+
   await rm(getConnectionPath(name), { force: true });
 
   const state = await readState();
@@ -204,7 +223,7 @@ export async function removeConnection(name: string): Promise<RemovalResult> {
 export async function listConnections(): Promise<ConnectionRecord[]> {
   await ensureDataDirectories();
   const names = await readJsonFileNames(getConnectionsDirectoryPath());
-  const items = await Promise.all(names.map((name) => readJson<ConnectionRecord>(getConnectionPath(name))));
+  const items = await Promise.all(names.map((name) => getConnection(name)));
   return items.sort((left, right) => left.name.localeCompare(right.name));
 }
 
@@ -221,13 +240,13 @@ export async function getConnection(name: string): Promise<ConnectionRecord> {
 export async function addProfile(name: string): Promise<ProfileRecord> {
   const normalizedName = normalizeProfileName(name);
 
-  if (isBuiltInProfileName(normalizedName)) {
+  if (isReservedBuiltInProfileName(normalizedName)) {
     throw new FriendlyMessageError(`Profile "${normalizedName}" is reserved for a built-in profile.`);
   }
 
-  const existing = await readProfileIfExists(normalizedName);
+  const existingName = await findStoredJsonBaseNameCaseInsensitive(getProfilesDirectoryPath(), normalizedName);
 
-  if (existing) {
+  if (existingName) {
     throw new FriendlyMessageError(`Profile "${normalizedName}" already exists.`);
   }
 
@@ -237,15 +256,15 @@ export async function addProfile(name: string): Promise<ProfileRecord> {
   };
 
   await ensureDataDirectories();
-  await writeJson(getProfilePath(profile.name), profile);
+  await writeProfile(profile.name, profile.ruleSetNames);
   return profile;
 }
 
 export async function addRuleSet(name: string): Promise<RuleSetRecord> {
   const normalizedName = normalizeRuleSetName(name);
-  const existing = await readRuleSetIfExists(normalizedName);
+  const existingName = await findStoredJsonBaseNameCaseInsensitive(getRuleSetsDirectoryPath(), normalizedName);
 
-  if (existing) {
+  if (existingName) {
     throw new FriendlyMessageError(`Rule set "${normalizedName}" already exists.`);
   }
 
@@ -261,9 +280,9 @@ export async function addRuleSet(name: string): Promise<RuleSetRecord> {
 
 export async function createRuleSet(name: string, rawInput: string): Promise<RuleSetRecord> {
   const normalizedName = normalizeRuleSetName(name);
-  const existing = await readRuleSetIfExists(normalizedName);
+  const existingName = await findStoredJsonBaseNameCaseInsensitive(getRuleSetsDirectoryPath(), normalizedName);
 
-  if (existing) {
+  if (existingName) {
     throw new FriendlyMessageError(`Rule set "${normalizedName}" already exists.`);
   }
 
@@ -281,6 +300,10 @@ export async function createRuleSet(name: string, rawInput: string): Promise<Rul
 export async function removeProfile(name: string): Promise<RemovalResult> {
   if (isBuiltInProfileName(name)) {
     throw new FriendlyMessageError(`Profile "${name}" is built in and cannot be removed.`);
+  }
+
+  if (!(await hasStoredJsonExact(getProfilesDirectoryPath(), name))) {
+    throw new FriendlyMessageError(`Profile "${name}" does not exist.`);
   }
 
   await rm(getProfilePath(name), { force: true });
@@ -309,6 +332,10 @@ export async function removeProfile(name: string): Promise<RemovalResult> {
 }
 
 export async function removeRuleSet(name: string): Promise<void> {
+  if (!(await hasStoredJsonExact(getRuleSetsDirectoryPath(), name))) {
+    throw new FriendlyMessageError(`Rule set "${name}" does not exist.`);
+  }
+
   const affectsActiveSelection = await isRuleSetReferencedByActiveProfile(name);
   await rm(getRuleSetPath(name), { force: true });
 
@@ -320,7 +347,7 @@ export async function removeRuleSet(name: string): Promise<void> {
     }
 
     profile.ruleSetNames = profile.ruleSetNames.filter((ruleSetName) => ruleSetName !== name);
-    await writeJson(getProfilePath(profile.name), profile);
+    await writeProfile(profile.name, profile.ruleSetNames);
   }
 
   if (affectsActiveSelection) {
@@ -406,10 +433,21 @@ export async function getServiceIntent(): Promise<boolean> {
   return (await readState()).serviceIntent === true;
 }
 
-export async function setIpv6Enabled(enabled: boolean): Promise<boolean> {
+export async function setIpv6Enabled(enabled: boolean): Promise<ActiveSelectionRuntimeResult> {
   const state = await readState();
   state.ipv6Enabled = enabled;
   await writeState(state);
+
+  if (!state.activeConnectionName || !state.activeProfileName) {
+    return {
+      activeSelectionComplete: false,
+      disabledService: false,
+      removedGeneratedConfig: false,
+      restartedService: false,
+      stoppedService: false
+    };
+  }
+
   return rebuildGeneratedConfigForActiveSelection();
 }
 
@@ -417,13 +455,19 @@ export async function getIpv6Enabled(): Promise<boolean> {
   return (await readState()).ipv6Enabled === true;
 }
 
-export async function setLogLevel(level: LogLevel): Promise<boolean> {
+export async function setLogLevel(level: LogLevel): Promise<ActiveSelectionRuntimeResult> {
   const state = await readState();
   state.logLevel = level;
   await writeState(state);
 
   if (!state.activeConnectionName || !state.activeProfileName) {
-    return false;
+    return {
+      activeSelectionComplete: false,
+      disabledService: false,
+      removedGeneratedConfig: false,
+      restartedService: false,
+      stoppedService: false
+    };
   }
 
   return rebuildGeneratedConfigForActiveSelection();
@@ -433,9 +477,20 @@ export async function getLogLevel(): Promise<LogLevel> {
   return (await readState()).logLevel ?? "error";
 }
 
-export async function rebuildGeneratedConfigForActiveSelection(): Promise<boolean> {
-  const result = await finalizeActiveSelectionRuntime();
-  return result.activeSelectionComplete;
+export async function rebuildGeneratedConfigForActiveSelection(): Promise<ActiveSelectionRuntimeResult> {
+  const state = await readState();
+
+  if (!state.activeConnectionName || !state.activeProfileName) {
+    return {
+      activeSelectionComplete: false,
+      disabledService: false,
+      removedGeneratedConfig: false,
+      restartedService: false,
+      stoppedService: false
+    };
+  }
+
+  return finalizeActiveSelectionRuntime();
 }
 
 export async function finalizeActiveSelectionRuntime(): Promise<ActiveSelectionRuntimeResult> {
@@ -532,9 +587,9 @@ export async function setProfileRuleSets(profileName: string, ruleSetNames: stri
     throw new FriendlyMessageError(`Profile "${profileName}" is built in and cannot be changed.`);
   }
 
-  const normalizedNames = Array.from(new Set(ruleSetNames.map((name) => normalizeRuleSetName(name))));
+  const uniqueNames = Array.from(new Set(ruleSetNames));
 
-  for (const name of normalizedNames) {
+  for (const name of uniqueNames) {
     const ruleSet = await readRuleSetIfExists(name);
 
     if (!ruleSet) {
@@ -542,20 +597,20 @@ export async function setProfileRuleSets(profileName: string, ruleSetNames: stri
     }
   }
 
-  profile.ruleSetNames = normalizedNames;
-  await writeJson(getProfilePath(profileName), profile);
+  profile.ruleSetNames = uniqueNames;
+  await writeProfile(profileName, profile.ruleSetNames);
 
   if (await isActiveProfile(profileName)) {
     await rebuildGeneratedConfigForActiveSelection();
   }
 
-  return normalizedNames;
+  return uniqueNames;
 }
 
 export async function addRulesToRuleSet(ruleSetName: string, rawInput: string): Promise<string[]> {
   const ruleSet = await readRuleSet(ruleSetName);
   const rules = parseRuleEntries(rawInput);
-  const affectsActiveSelection = await isRuleSetReferencedByActiveProfile(ruleSetName);
+  const affectsActiveSelection = await isRuleSetReferencedByActiveProfile(ruleSet.name);
 
   if (rules.length === 0) {
     return [];
@@ -565,7 +620,7 @@ export async function addRulesToRuleSet(ruleSetName: string, rawInput: string): 
   const addedRules = rules.filter((rule) => !existingRules.has(rule));
   const nextRules = Array.from(new Set([...ruleSet.rules, ...rules]));
   ruleSet.rules = nextRules;
-  await writeRuleSet(ruleSetName, ruleSet.rules);
+  await writeRuleSet(ruleSet.name, ruleSet.rules);
 
   if (affectsActiveSelection) {
     await rebuildGeneratedConfigForActiveSelection();
@@ -577,9 +632,9 @@ export async function addRulesToRuleSet(ruleSetName: string, rawInput: string): 
 export async function setRulesForRuleSet(ruleSetName: string, rawInput: string): Promise<string[]> {
   const ruleSet = await readRuleSet(ruleSetName);
   const rules = parseRuleEntries(rawInput);
-  const affectsActiveSelection = await isRuleSetReferencedByActiveProfile(ruleSetName);
+  const affectsActiveSelection = await isRuleSetReferencedByActiveProfile(ruleSet.name);
   ruleSet.rules = rules;
-  await writeRuleSet(ruleSetName, ruleSet.rules);
+  await writeRuleSet(ruleSet.name, ruleSet.rules);
 
   if (affectsActiveSelection) {
     await rebuildGeneratedConfigForActiveSelection();
@@ -590,7 +645,7 @@ export async function setRulesForRuleSet(ruleSetName: string, rawInput: string):
 
 export async function removeRulesFromRuleSet(ruleSetName: string, rules: string[]): Promise<string[]> {
   const ruleSet = await readRuleSet(ruleSetName);
-  const affectsActiveSelection = await isRuleSetReferencedByActiveProfile(ruleSetName);
+  const affectsActiveSelection = await isRuleSetReferencedByActiveProfile(ruleSet.name);
 
   if (rules.length === 0) {
     return [];
@@ -604,7 +659,7 @@ export async function removeRulesFromRuleSet(ruleSetName: string, rules: string[
   }
 
   ruleSet.rules = ruleSet.rules.filter((rule) => !rulesToRemove.has(rule));
-  await writeRuleSet(ruleSetName, ruleSet.rules);
+  await writeRuleSet(ruleSet.name, ruleSet.rules);
 
   if (affectsActiveSelection) {
     await rebuildGeneratedConfigForActiveSelection();
@@ -614,41 +669,54 @@ export async function removeRulesFromRuleSet(ruleSetName: string, rules: string[
 }
 
 function normalizeConnectionName(name: string): string {
-  const normalized = sanitizeName(name);
+  const normalized = trimInputName(name);
 
   if (normalized.length === 0) {
     throw new FriendlyMessageError("Connection name cannot be empty.");
   }
 
+  ensureSupportedFileName(normalized, "Connection");
   return normalized;
 }
 
 function normalizeProfileName(name: string): string {
-  const normalized = sanitizeName(name);
+  const normalized = trimInputName(name);
 
   if (normalized.length === 0) {
     throw new FriendlyMessageError("Profile name cannot be empty.");
   }
 
+  ensureSupportedFileName(normalized, "Profile");
   return normalized;
 }
 
 function normalizeRuleSetName(name: string): string {
-  const normalized = sanitizeName(name);
+  const normalized = trimInputName(name);
 
   if (normalized.length === 0) {
     throw new FriendlyMessageError("Rule set name cannot be empty.");
   }
 
+  ensureSupportedFileName(normalized, "Rule set");
   return normalized;
 }
 
-function sanitizeName(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/gu, "-")
-    .replace(/^-+|-+$/gu, "");
+function trimInputName(value: string): string {
+  return value.trim();
+}
+
+function ensureSupportedFileName(value: string, entityLabel: "Connection" | "Profile" | "Rule set"): void {
+  if (value === "." || value === "..") {
+    throw new FriendlyMessageError(`${entityLabel} name cannot be "." or "..".`);
+  }
+
+  if (value.includes("/")) {
+    throw new FriendlyMessageError(`${entityLabel} name cannot contain "/".`);
+  }
+
+  if (value.includes("\0")) {
+    throw new FriendlyMessageError(`${entityLabel} name cannot contain the NUL character.`);
+  }
 }
 
 function parseRuleEntries(rawInput: string): string[] {
@@ -718,15 +786,13 @@ async function readRuleSet(name: string): Promise<RuleSetRecord> {
 }
 
 async function readConnectionIfExists(name: string): Promise<ConnectionRecord | undefined> {
-  try {
-    return await readJson<ConnectionRecord>(getConnectionPath(name));
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      return undefined;
-    }
+  const connection = await readStoredJsonExact<StoredConnectionRecord>(getConnectionsDirectoryPath(), name);
 
-    throw error;
+  if (!connection) {
+    return undefined;
   }
+
+  return validateConnectionRecord(connection, name);
 }
 
 async function readProfileIfExists(name: string): Promise<ProfileRecord | undefined> {
@@ -736,39 +802,50 @@ async function readProfileIfExists(name: string): Promise<ProfileRecord | undefi
     return builtInProfile;
   }
 
-  try {
-    const profile = await readJson<ProfileRecord>(getProfilePath(name));
-    return validateProfileRecord(profile, name);
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      return undefined;
-    }
+  const profile = await readStoredJsonExact<StoredProfileRecord>(getProfilesDirectoryPath(), name);
 
-    throw error;
+  if (!profile) {
+    return undefined;
   }
+
+  return validateProfileRecord(profile, name);
 }
 
 async function readRuleSetIfExists(name: string): Promise<RuleSetRecord | undefined> {
-  try {
-    const ruleSet = await readJson<StoredRuleSetRecord>(getRuleSetPath(name));
-    return validateRuleSetRecord(ruleSet, name);
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      return undefined;
-    }
+  const ruleSet = await readStoredJsonExact<StoredRuleSetRecord>(getRuleSetsDirectoryPath(), name);
 
-    throw error;
+  if (!ruleSet) {
+    return undefined;
   }
+
+  return validateRuleSetRecord(ruleSet, name);
 }
 
-function validateProfileRecord(profile: ProfileRecord, profileName: string): ProfileRecord {
+function validateConnectionRecord(
+  connection: StoredConnectionRecord,
+  connectionName: string
+): ConnectionRecord {
+  if (typeof connection.uri !== "string") {
+    throw new FriendlyMessageError(`Connection "${connectionName}" has an invalid file format.`);
+  }
+
+  return {
+    name: connectionName,
+    uri: connection.uri
+  };
+}
+
+function validateProfileRecord(profile: StoredProfileRecord, profileName: string): ProfileRecord {
   if (!Array.isArray(profile.ruleSetNames)) {
     throw new FriendlyMessageError(
       `Profile "${profileName}" uses an outdated file format. Recreate it for the new rule set model.`
     );
   }
 
-  return profile;
+  return {
+    name: profileName,
+    ruleSetNames: profile.ruleSetNames
+  };
 }
 
 function getBuiltInProfile(name: string): ProfileRecord | undefined {
@@ -777,6 +854,10 @@ function getBuiltInProfile(name: string): ProfileRecord | undefined {
 
 function isBuiltInProfileName(name: string): boolean {
   return getBuiltInProfile(name) !== undefined;
+}
+
+function isReservedBuiltInProfileName(name: string): boolean {
+  return BUILT_IN_PROFILES.some((profile) => profile.name.toLowerCase() === name.toLowerCase());
 }
 
 function validateRuleSetRecord(ruleSet: StoredRuleSetRecord, ruleSetName: string): RuleSetRecord {
@@ -876,8 +957,49 @@ async function writeJson(filePath: string, value: unknown): Promise<void> {
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
+async function readStoredJsonExact<T>(directoryPath: string, name: string): Promise<T | undefined> {
+  const exactFileName = await findStoredJsonFileNameExact(directoryPath, name);
+
+  if (!exactFileName) {
+    return undefined;
+  }
+
+  try {
+    return readJson<T>(join(directoryPath, exactFileName));
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
+async function hasStoredJsonExact(directoryPath: string, name: string): Promise<boolean> {
+  return (await findStoredJsonFileNameExact(directoryPath, name)) !== undefined;
+}
+
+async function writeConnection(name: string, uri: string): Promise<void> {
+  await writeJson(getConnectionPath(name), { uri } satisfies StoredConnectionRecord);
+}
+
+async function writeProfile(name: string, ruleSetNames: string[]): Promise<void> {
+  await writeJson(getProfilePath(name), { ruleSetNames } satisfies StoredProfileRecord);
+}
+
 async function writeRuleSet(name: string, rules: string[]): Promise<void> {
   await writeJson(getRuleSetPath(name), { rules } satisfies StoredRuleSetRecord);
+}
+
+async function renameFilePreservingCase(currentPath: string, nextPath: string): Promise<void> {
+  if (currentPath === nextPath) {
+    return;
+  }
+
+  const tempPath = `${currentPath}.rename-temp`;
+  await rm(tempPath, { force: true });
+  await rename(currentPath, tempPath);
+  await rename(tempPath, nextPath);
 }
 
 async function readJsonFileNames(directoryPath: string): Promise<string[]> {
@@ -885,6 +1007,48 @@ async function readJsonFileNames(directoryPath: string): Promise<string[]> {
     .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
     .map((entry) => entry.name.replace(/\.json$/u, ""))
     .sort((left, right) => left.localeCompare(right));
+}
+
+async function findStoredJsonFileNameExact(directoryPath: string, name: string): Promise<string | undefined> {
+  const exactFileName = `${name}.json`;
+
+  try {
+    const entries = await readdir(directoryPath, { withFileTypes: true });
+    const exactEntry = entries.find((entry) => entry.isFile() && entry.name === exactFileName);
+
+    return exactEntry?.name;
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
+async function findStoredJsonBaseNameCaseInsensitive(
+  directoryPath: string,
+  name: string
+): Promise<string | undefined> {
+  const targetFileName = `${name}.json`;
+  try {
+    const entries = await readdir(directoryPath, { withFileTypes: true });
+    const matchedEntry = entries.find(
+      (entry) => entry.isFile() && entry.name.toLowerCase() === targetFileName.toLowerCase()
+    );
+
+    if (!matchedEntry) {
+      return undefined;
+    }
+
+    return matchedEntry.name.replace(/\.json$/u, "");
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
 }
 
 function isMissingFileError(error: unknown): error is NodeJS.ErrnoException {

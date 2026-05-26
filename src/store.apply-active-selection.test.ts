@@ -41,15 +41,15 @@ describe("applyActiveSelection", () => {
     await addConnection("Old", "vless://old");
     await addConnection("New", "vless://new");
     await addProfile("Office");
-    await setActiveSelection("old", "office");
+    await setActiveSelection("Old", "Office");
 
-    await expect(applyActiveSelection("new", "office")).rejects.toThrow("kickstart failed");
+    await expect(applyActiveSelection("New", "Office")).rejects.toThrow("kickstart failed");
 
-    expect(await getActiveConnectionName()).toBe("new");
-    expect(await getActiveProfileName()).toBe("office");
+    expect(await getActiveConnectionName()).toBe("New");
+    expect(await getActiveProfileName()).toBe("Office");
     expect(JSON.parse(await readFile(getGeneratedConfigPath(), "utf8"))).toEqual({
-      connectionName: "new",
-      profileName: "office"
+      connectionName: "New",
+      profileName: "Office"
     });
   });
 });

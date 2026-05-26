@@ -2,6 +2,7 @@ import { log } from "@clack/prompts";
 import { FriendlyMessageError, promptSelect } from "../cli.js";
 import { getIpv6Enabled, setIpv6Enabled } from "../store.js";
 import { runChildMenuLoop } from "./menu-loop.js";
+import { runAndLogRuntimeRefresh } from "./shared.js";
 
 type IPv6Action = "back" | "disable" | "enable";
 
@@ -52,12 +53,8 @@ async function runSetIpv6Enabled(enabled: boolean): Promise<void> {
     throw new FriendlyMessageError(`IPv6 is already ${enabled ? "enabled" : "disabled"}.`);
   }
 
-  const rebuilt = await setIpv6Enabled(enabled);
-  log.success(`IPv6 ${enabled ? "enabled" : "disabled"}.`);
-
-  if (rebuilt) {
-    log.info("Rebuilt config.json from the active selection.");
-  } else {
-    log.info("No active selection to rebuild.");
-  }
+  await runAndLogRuntimeRefresh({
+    run: () => setIpv6Enabled(enabled),
+    success: () => `IPv6 ${enabled ? "enabled" : "disabled"}.`
+  });
 }

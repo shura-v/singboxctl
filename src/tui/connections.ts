@@ -27,7 +27,7 @@ export async function runConnectionsMenu(): Promise<void> {
           {
             value: "edit",
             label: "Edit",
-            hint: connections.length > 0 ? "Update a saved connection" : "No saved connections yet"
+            hint: connections.length > 0 ? "Update a saved connection name and URI" : "No saved connections yet"
           },
           {
             value: "back",
@@ -100,6 +100,13 @@ async function runConnectionsEdit(): Promise<void> {
     throw new FriendlyMessageError(`Connection "${currentName}" does not exist.`);
   }
 
+  const name = await promptText({
+    message: "Connection name",
+    placeholder: "work-vless",
+    initialValue: connection.name,
+    validate: requiredText("Connection name is required.")
+  });
+
   const uri = await promptText({
     message: "Connection URI",
     placeholder: "vless://...",
@@ -111,13 +118,6 @@ async function runConnectionsEdit(): Promise<void> {
   for (const warning of warnings) {
     log.warn(warning);
   }
-
-  const name = await promptText({
-    message: "Connection name",
-    placeholder: "work-vless",
-    initialValue: connection.name,
-    validate: requiredText("Connection name is required.")
-  });
 
   const updatedConnection = await updateConnection(currentName, name, uri);
   log.success(`Updated connection "${updatedConnection.name}".`);

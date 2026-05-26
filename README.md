@@ -47,13 +47,14 @@ If `sing-box` is not available yet, the app will show an error with installation
 
 The current TUI includes:
 
+- `Auto-start in background`
 - `Connect in terminal`
 - `Select connection and profile`
 - `Connections`
 - `Profiles`
 - `Rule Sets`
+- `IPv6`
 - `Logs`
-- `Auto-start in background`
 
 ## Notes
 

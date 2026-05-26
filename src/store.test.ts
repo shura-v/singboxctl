@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -13,6 +13,7 @@ import {
   createRuleSet,
   getActiveConnectionName,
   getActiveProfileName,
+  getConnection,
   getDataDirectoryPath,
   getGeneratedConfigPath,
   getIpv6Enabled,
@@ -21,8 +22,10 @@ import {
   listConnections,
   listProfiles,
   listRuleSets,
+  rebuildGeneratedConfigForActiveSelection,
   removeConnection,
   removeProfile,
+  removeRuleSet,
   removeRulesFromRuleSet,
   setActiveProfile,
   setProfileRuleSets,
@@ -48,16 +51,51 @@ describe("store", () => {
   it("stores a connection with the user-provided name", async () => {
     const connection = await addConnection("Work Vless", "vless://example#work");
 
-    expect(connection.name).toBe("work-vless");
+    expect(connection.name).toBe("Work Vless");
     expect(connection.uri).toBe("vless://example#work");
 
     const connections = await listConnections();
     expect(connections).toEqual([
       {
-        name: "work-vless",
+        name: "Work Vless",
         uri: "vless://example#work"
       }
     ]);
+
+    const storedConnection = JSON.parse(
+      await readFile(join(getDataDirectoryPath(), "connections", "Work Vless.json"), "utf8")
+    ) as { name?: string; uri: string };
+
+    expect(storedConnection).toEqual({
+      uri: "vless://example#work"
+    });
+    expect(storedConnection).not.toHaveProperty("name");
+  });
+
+  it("rejects connections whose names differ only by case", async () => {
+    await addConnection("Work", "vless://example#work");
+
+    await expect(addConnection("work", "vless://example#work-2")).rejects.toThrow(
+      'Connection "work" already exists.'
+    );
+  });
+
+  it("requires exact casing when reading a stored connection", async () => {
+    await addConnection("Work", "vless://example#work");
+
+    await expect(getConnection("work")).rejects.toThrow('Connection "work" does not exist.');
+  });
+
+  it("trims connection names without changing their contents", async () => {
+    const connection = await addConnection("  Work   V2   Main  ", "vless://example#work");
+
+    expect(connection.name).toBe("Work   V2   Main");
+  });
+
+  it("rejects connection names containing a slash", async () => {
+    await expect(addConnection("Work.v2/Main", "vless://example#work")).rejects.toThrow(
+      'Connection name cannot contain "/".'
+    );
   });
 
   it("stores and clears the active selection", async () => {
@@ -65,10 +103,10 @@ describe("store", () => {
     await addProfile("Office");
     await setServiceIntent(true);
 
-    await setActiveSelection("work", "office");
+    await setActiveSelection("Work", "Office");
 
-    expect(await getActiveConnectionName()).toBe("work");
-    expect(await getActiveProfileName()).toBe("office");
+    expect(await getActiveConnectionName()).toBe("Work");
+    expect(await getActiveProfileName()).toBe("Office");
 
     await clearActiveSelection();
 
@@ -80,10 +118,22 @@ describe("store", () => {
   it("stores the IPv6 enabled flag in state", async () => {
     expect(await getIpv6Enabled()).toBe(false);
 
-    await setIpv6Enabled(true);
+    await expect(setIpv6Enabled(true)).resolves.toEqual({
+      activeSelectionComplete: false,
+      disabledService: false,
+      removedGeneratedConfig: false,
+      restartedService: false,
+      stoppedService: false
+    });
     expect(await getIpv6Enabled()).toBe(true);
 
-    await setIpv6Enabled(false);
+    await expect(setIpv6Enabled(false)).resolves.toEqual({
+      activeSelectionComplete: false,
+      disabledService: false,
+      removedGeneratedConfig: false,
+      restartedService: false,
+      stoppedService: false
+    });
     expect(await getIpv6Enabled()).toBe(false);
   });
 
@@ -97,33 +147,62 @@ describe("store", () => {
     expect(await getLogLevel()).toBe("warn");
   });
 
+  it("does not touch runtime when rebuilding without an active selection", async () => {
+    await expect(rebuildGeneratedConfigForActiveSelection()).resolves.toEqual({
+      activeSelectionComplete: false,
+      disabledService: false,
+      removedGeneratedConfig: false,
+      restartedService: false,
+      stoppedService: false
+    });
+  });
+
   it("preserves the active connection when only the active profile changes", async () => {
     await addConnection("Work", "vless://example#work");
     await addProfile("Office");
     await addProfile("Home");
 
-    await setActiveSelection("work", "office");
-    await setActiveProfile("home");
+    await setActiveSelection("Work", "Office");
+    await setActiveProfile("Home");
 
-    expect(await getActiveConnectionName()).toBe("work");
-    expect(await getActiveProfileName()).toBe("home");
+    expect(await getActiveConnectionName()).toBe("Work");
+    expect(await getActiveProfileName()).toBe("Home");
   });
 
   it("renames an active connection and keeps the active selection in sync", async () => {
     await addConnection("Work", VALID_VLESS_URI);
     await addProfile("Office");
-    await setActiveSelection("work", "office");
+    await setActiveSelection("Work", "Office");
 
-    const connection = await updateConnection("work", "Work V2", UPDATED_VLESS_URI);
+    const connection = await updateConnection("Work", "Work V2", UPDATED_VLESS_URI);
 
     expect(connection).toEqual({
-      name: "work-v2",
+      name: "Work V2",
       uri: UPDATED_VLESS_URI
     });
-    expect(await getActiveConnectionName()).toBe("work-v2");
+    expect(await getActiveConnectionName()).toBe("Work V2");
     expect(await listConnections()).toEqual([
       {
-        name: "work-v2",
+        name: "Work V2",
+        uri: UPDATED_VLESS_URI
+      }
+    ]);
+  });
+
+  it("allows case-only connection renames and renames the file on disk", async () => {
+    await addConnection("Work", VALID_VLESS_URI);
+
+    const connection = await updateConnection("Work", "work", UPDATED_VLESS_URI);
+    const files = await readdir(join(getDataDirectoryPath(), "connections"));
+
+    expect(connection).toEqual({
+      name: "work",
+      uri: UPDATED_VLESS_URI
+    });
+    expect(files).toEqual(["work.json"]);
+    expect(await listConnections()).toEqual([
+      {
+        name: "work",
         uri: UPDATED_VLESS_URI
       }
     ]);
@@ -132,10 +211,10 @@ describe("store", () => {
   it("rebuilds config.json when the active connection is edited", async () => {
     await addConnection("Work", VALID_VLESS_URI);
     await addProfile("Office");
-    await setActiveSelection("work", "office");
-    await buildAndWriteGeneratedConfig("work", "office");
+    await setActiveSelection("Work", "Office");
+    await buildAndWriteGeneratedConfig("Work", "Office");
 
-    await updateConnection("work", "Work", UPDATED_VLESS_URI);
+    await updateConnection("Work", "Work", UPDATED_VLESS_URI);
 
     const config = JSON.parse(await readFile(getGeneratedConfigPath(), "utf8")) as {
       outbounds: Array<{ server: string; server_port: number; tls: { reality: { public_key: string } } }>;
@@ -155,10 +234,10 @@ describe("store", () => {
   it("removes config.json and clears only the active connection when deleting it", async () => {
     await addConnection("Work", VALID_VLESS_URI);
     await addProfile("Office");
-    await setActiveSelection("work", "office");
-    await buildAndWriteGeneratedConfig("work", "office");
+    await setActiveSelection("Work", "Office");
+    await buildAndWriteGeneratedConfig("Work", "Office");
 
-    const result = await removeConnection("work");
+    const result = await removeConnection("Work");
 
     await expect(readFile(getGeneratedConfigPath(), "utf8")).rejects.toThrow();
     expect(result).toEqual({
@@ -170,16 +249,33 @@ describe("store", () => {
       stoppedService: false
     });
     expect(await getActiveConnectionName()).toBeUndefined();
-    expect(await getActiveProfileName()).toBe("office");
+    expect(await getActiveProfileName()).toBe("Office");
+  });
+
+  it("removes a malformed connection file", async () => {
+    await addConnection("Work", VALID_VLESS_URI);
+    await writeFile(join(getDataDirectoryPath(), "connections", "Work.json"), "{", "utf8");
+
+    const result = await removeConnection("Work");
+
+    expect(result).toEqual({
+      clearedActiveConnection: false,
+      clearedActiveProfile: false,
+      disabledService: false,
+      removedGeneratedConfig: false,
+      restartedService: false,
+      stoppedService: false
+    });
+    await expect(listConnections()).resolves.toEqual([]);
   });
 
   it("removes config.json and clears only the active profile when deleting it", async () => {
     await addConnection("Work", VALID_VLESS_URI);
     await addProfile("Office");
-    await setActiveSelection("work", "office");
-    await buildAndWriteGeneratedConfig("work", "office");
+    await setActiveSelection("Work", "Office");
+    await buildAndWriteGeneratedConfig("Work", "Office");
 
-    const result = await removeProfile("office");
+    const result = await removeProfile("Office");
 
     await expect(readFile(getGeneratedConfigPath(), "utf8")).rejects.toThrow();
     expect(result).toEqual({
@@ -190,7 +286,7 @@ describe("store", () => {
       restartedService: false,
       stoppedService: false
     });
-    expect(await getActiveConnectionName()).toBe("work");
+    expect(await getActiveConnectionName()).toBe("Work");
     expect(await getActiveProfileName()).toBeUndefined();
   });
 
@@ -198,7 +294,7 @@ describe("store", () => {
     await addRuleSet("Work");
 
     const addedRules = await addRulesToRuleSet(
-      "work",
+      "Work",
       "domain:chatgpt.com\ndomain:raw.githubusercontent.com\ndomain:ios.chat.openai.com\ndomain:ab.chatgpt.com"
     );
 
@@ -212,7 +308,7 @@ describe("store", () => {
     const ruleSets = await listRuleSets();
     expect(ruleSets).toEqual([
       {
-        name: "work",
+        name: "Work",
         rules: [
           "domain:chatgpt.com",
           "domain:raw.githubusercontent.com",
@@ -226,11 +322,11 @@ describe("store", () => {
   it("removes multiple selected rules from a rule set", async () => {
     await addRuleSet("Work");
     await addRulesToRuleSet(
-      "work",
+      "Work",
       "domain:google.com\ndomain_suffix:google.com\nip_cidr:1.2.3.0/24"
     );
 
-    const removedRules = await removeRulesFromRuleSet("work", [
+    const removedRules = await removeRulesFromRuleSet("Work", [
       "domain_suffix:google.com",
       "ip_cidr:1.2.3.0/24"
     ]);
@@ -241,7 +337,7 @@ describe("store", () => {
     ]);
 
     const profileJson = JSON.parse(
-      await readFile(join(getDataDirectoryPath(), "rule-sets", "work.json"), "utf8")
+      await readFile(join(getDataDirectoryPath(), "rule-sets", "Work.json"), "utf8")
     ) as { rules: string[] };
 
     expect(profileJson).toEqual({
@@ -254,13 +350,13 @@ describe("store", () => {
     await addRuleSet("Google");
     await addRuleSet("Microsoft");
 
-    await setProfileRuleSets("work", ["google", "microsoft"]);
+    await setProfileRuleSets("Work", ["Google", "Microsoft"]);
 
     const profiles = await listProfiles();
     expect(profiles).toEqual([
       {
-        name: "work",
-        ruleSetNames: ["google", "microsoft"]
+        name: "Work",
+        ruleSetNames: ["Google", "Microsoft"]
       },
       {
         builtIn: "full-tunnel",
@@ -268,6 +364,15 @@ describe("store", () => {
         ruleSetNames: []
       }
     ]);
+
+    const storedProfile = JSON.parse(
+      await readFile(join(getDataDirectoryPath(), "profiles", "Work.json"), "utf8")
+    ) as { name?: string; ruleSetNames: string[] };
+
+    expect(storedProfile).toEqual({
+      ruleSetNames: ["Google", "Microsoft"]
+    });
+    expect(storedProfile).not.toHaveProperty("name");
   });
 
   it("does not rebuild config.json when editing an inactive profile", async () => {
@@ -275,11 +380,11 @@ describe("store", () => {
     await addProfile("Office");
     await addProfile("Home");
     await addRuleSet("Services");
-    await setActiveSelection("work", "office");
-    await buildAndWriteGeneratedConfig("work", "office");
+    await setActiveSelection("Work", "Office");
+    await buildAndWriteGeneratedConfig("Work", "Office");
     const previousConfigJson = await readFile(getGeneratedConfigPath(), "utf8");
 
-    await setProfileRuleSets("home", ["services"]);
+    await setProfileRuleSets("Home", ["Services"]);
 
     expect(await readFile(getGeneratedConfigPath(), "utf8")).toBe(previousConfigJson);
   });
@@ -289,7 +394,7 @@ describe("store", () => {
 
     expect(await listProfiles()).toEqual([
       {
-        name: "work",
+        name: "Work",
         ruleSetNames: []
       },
       {
@@ -306,17 +411,81 @@ describe("store", () => {
     );
   });
 
+  it("rejects case variants of the built-in profile name for user profiles", async () => {
+    await expect(addProfile("all traffic (built-in)")).rejects.toThrow(
+      'Profile "all traffic (built-in)" is reserved for a built-in profile.'
+    );
+  });
+
   it("rejects malformed rule set files during listing", async () => {
     await addRuleSet("Work");
-    await writeFile(join(getDataDirectoryPath(), "rule-sets", "work.json"), JSON.stringify({}), "utf8");
+    await writeFile(join(getDataDirectoryPath(), "rule-sets", "Work.json"), JSON.stringify({}), "utf8");
 
-    await expect(listRuleSets()).rejects.toThrow('Rule set "work" has an invalid file format.');
+    await expect(listRuleSets()).rejects.toThrow('Rule set "Work" has an invalid file format.');
+  });
+
+  it("removes a malformed profile file", async () => {
+    await addProfile("Work");
+    await writeFile(join(getDataDirectoryPath(), "profiles", "Work.json"), JSON.stringify({}), "utf8");
+
+    const result = await removeProfile("Work");
+
+    expect(result).toEqual({
+      clearedActiveConnection: false,
+      clearedActiveProfile: false,
+      disabledService: false,
+      removedGeneratedConfig: false,
+      restartedService: false,
+      stoppedService: false
+    });
+    await expect(listProfiles()).resolves.toEqual([
+      {
+        builtIn: "full-tunnel",
+        name: FULL_TUNNEL_PROFILE_NAME,
+        ruleSetNames: []
+      }
+    ]);
+  });
+
+  it("removes a malformed rule set file", async () => {
+    await addRuleSet("Work");
+    await writeFile(join(getDataDirectoryPath(), "rule-sets", "Work.json"), JSON.stringify({}), "utf8");
+
+    await removeRuleSet("Work");
+
+    await expect(listRuleSets()).resolves.toEqual([]);
+  });
+
+  it("rejects removing a rule set with the wrong case", async () => {
+    await addProfile("Office");
+    await addRuleSet("Services");
+    await setProfileRuleSets("Office", ["Services"]);
+
+    await expect(removeRuleSet("services")).rejects.toThrow('Rule set "services" does not exist.');
+
+    await expect(listRuleSets()).resolves.toEqual([
+      {
+        name: "Services",
+        rules: []
+      }
+    ]);
+    await expect(listProfiles()).resolves.toEqual([
+      {
+        name: "Office",
+        ruleSetNames: ["Services"]
+      },
+      {
+        builtIn: "full-tunnel",
+        name: FULL_TUNNEL_PROFILE_NAME,
+        ruleSetNames: []
+      }
+    ]);
   });
 
   it("rejects unsupported stored rule entries during listing", async () => {
     await addRuleSet("Work");
     await writeFile(
-      join(getDataDirectoryPath(), "rule-sets", "work.json"),
+      join(getDataDirectoryPath(), "rule-sets", "Work.json"),
       JSON.stringify({ rules: ["geosite:openai"] }),
       "utf8"
     );
@@ -329,14 +498,14 @@ describe("store", () => {
   it("uses the filename as the rule set name", async () => {
     await addRuleSet("Google");
     await writeFile(
-      join(getDataDirectoryPath(), "rule-sets", "google.json"),
-      JSON.stringify({ name: "work", rules: ["domain:google.com"] }),
+      join(getDataDirectoryPath(), "rule-sets", "Google.json"),
+      JSON.stringify({ name: "Work", rules: ["domain:google.com"] }),
       "utf8"
     );
 
     await expect(listRuleSets()).resolves.toEqual([
       {
-        name: "google",
+        name: "Google",
         rules: ["domain:google.com"]
       }
     ]);
@@ -345,7 +514,7 @@ describe("store", () => {
   it("rejects unsupported rule syntax before saving a rule set", async () => {
     await addRuleSet("Work");
 
-    await expect(setRulesForRuleSet("work", "geosite:openai")).rejects.toThrow(
+    await expect(setRulesForRuleSet("Work", "geosite:openai")).rejects.toThrow(
       'Unsupported rule type "geosite". Use domain, domain_suffix, or ip_cidr.'
     );
   });
@@ -353,7 +522,7 @@ describe("store", () => {
   it("rejects malformed rule lines before saving a rule set", async () => {
     await addRuleSet("Work");
 
-    await expect(setRulesForRuleSet("work", "google.com")).rejects.toThrow(
+    await expect(setRulesForRuleSet("Work", "google.com")).rejects.toThrow(
       'Unsupported rule "google.com". Use domain:, domain_suffix:, or ip_cidr:.'
     );
   });
@@ -366,11 +535,19 @@ describe("store", () => {
     await expect(listRuleSets()).resolves.toEqual([]);
   });
 
+  it("rejects rule set names that differ only by case", async () => {
+    await addRuleSet("Services");
+
+    await expect(createRuleSet("services", "domain:openai.com")).rejects.toThrow(
+      'Rule set "services" already exists.'
+    );
+  });
+
   it("does not rebuild config.json when creating an unassigned rule set", async () => {
     await addConnection("Work", VALID_VLESS_URI);
     await addProfile("Office");
-    await setActiveSelection("work", "office");
-    await buildAndWriteGeneratedConfig("work", "office");
+    await setActiveSelection("Work", "Office");
+    await buildAndWriteGeneratedConfig("Work", "Office");
     const previousConfigJson = await readFile(getGeneratedConfigPath(), "utf8");
 
     await createRuleSet("Services", "domain:openai.com");
@@ -382,9 +559,9 @@ describe("store", () => {
     await addConnection("Work", VALID_VLESS_URI);
     await addProfile("Office");
     await addRuleSet("Services");
-    await setProfileRuleSets("office", ["services"]);
-    await setActiveSelection("work", "office");
-    await setRulesForRuleSet("services", "domain:openai.com");
+    await setProfileRuleSets("Office", ["Services"]);
+    await setActiveSelection("Work", "Office");
+    await setRulesForRuleSet("Services", "domain:openai.com");
 
     const initialConfig = JSON.parse(await readFile(getGeneratedConfigPath(), "utf8")) as {
       route: { rules: Array<{ domain?: string[]; domain_suffix?: string[] }> };
@@ -398,7 +575,7 @@ describe("store", () => {
       ])
     );
 
-    await setRulesForRuleSet("services", "domain_suffix:chatgpt.com");
+    await setRulesForRuleSet("Services", "domain_suffix:chatgpt.com");
 
     const updatedConfig = JSON.parse(await readFile(getGeneratedConfigPath(), "utf8")) as {
       route: { rules: Array<{ domain?: string[]; domain_suffix?: string[] }> };
@@ -425,12 +602,12 @@ describe("store", () => {
     await addProfile("Office");
     await addRuleSet("Services");
     await addRuleSet("Other");
-    await setProfileRuleSets("office", ["services"]);
-    await setActiveSelection("work", "office");
-    await setRulesForRuleSet("services", "domain:openai.com");
+    await setProfileRuleSets("Office", ["Services"]);
+    await setActiveSelection("Work", "Office");
+    await setRulesForRuleSet("Services", "domain:openai.com");
     const previousConfigJson = await readFile(getGeneratedConfigPath(), "utf8");
 
-    await setRulesForRuleSet("other", "domain:example.com");
+    await setRulesForRuleSet("Other", "domain:example.com");
 
     expect(await readFile(getGeneratedConfigPath(), "utf8")).toBe(previousConfigJson);
   });

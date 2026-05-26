@@ -1,6 +1,8 @@
 import { log } from "@clack/prompts";
 import { FriendlyMessageError, promptSelect } from "../cli.js";
 import { getActiveSelection, listSelectableOptions, selectAndApplyByName } from "../select-and-apply.js";
+import { FULL_TUNNEL_PROFILE_NAME } from "../store.js";
+import { runAndLogRuntimeRefresh } from "./shared.js";
 
 export async function runSelectAndApplyFlow(): Promise<void> {
   const { connections, profiles } = await listSelectableOptions();
@@ -33,15 +35,16 @@ export async function runSelectAndApplyFlow(): Promise<void> {
       hint:
         profile.name === currentProfileName
           ? "current"
-          : profile.name === "all-traffic"
+          : profile.name === FULL_TUNNEL_PROFILE_NAME
             ? "built-in full tunnel"
             : undefined
     })),
     "Choose a profile"
   );
 
-  const selection = await selectAndApplyByName(connectionName, profileName);
-  log.success(
-    `Applied connection "${selection.connectionName}" with profile "${selection.profileName}" and wrote ${selection.configPath}.`
-  );
+  await runAndLogRuntimeRefresh({
+    run: () => selectAndApplyByName(connectionName, profileName),
+    success: (selection) =>
+      `Applied connection "${selection.connectionName}" with profile "${selection.profileName}" and wrote ${selection.configPath}.`
+  });
 }

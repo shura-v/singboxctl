@@ -58,7 +58,7 @@ export async function clearServiceLogs(
   fileExistsChecker: FileExistsChecker = fileExists
 ): Promise<void> {
   if (!(await fileExistsChecker(SERVICE_LOG_PATH))) {
-    throw new FriendlyMessageError(`Service log not found at ${SERVICE_LOG_PATH}.`);
+    return;
   }
 
   await ensureSudoSession(streamingRunner, isRoot);
@@ -92,6 +92,7 @@ export async function installService(
     await runPrivilegedStreaming("chown", ["root:wheel", SERVICE_PLIST_PATH], streamingRunner, isRoot);
     await runPrivilegedStreaming("chmod", ["644", SERVICE_PLIST_PATH], streamingRunner, isRoot);
     await runPrivilegedStreaming("launchctl", ["enable", `system/${SERVICE_LABEL}`], streamingRunner, isRoot);
+    await clearServiceLogBeforeStart(streamingRunner, isRoot);
     await runPrivilegedStreaming(
       "launchctl",
       ["bootstrap", "system", SERVICE_PLIST_PATH],
@@ -178,10 +179,12 @@ export async function restartServiceIfInstalled(
   await runPrivilegedStreaming("launchctl", ["enable", `system/${SERVICE_LABEL}`], streamingRunner, isRoot);
 
   if (await isServiceLoaded(captureRunner, isRoot)) {
+    await clearServiceLogBeforeStart(streamingRunner, isRoot);
     await runPrivilegedStreaming("launchctl", ["kickstart", "-k", `system/${SERVICE_LABEL}`], streamingRunner, isRoot);
     return true;
   }
 
+  await clearServiceLogBeforeStart(streamingRunner, isRoot);
   await runPrivilegedStreaming("launchctl", ["bootstrap", "system", SERVICE_PLIST_PATH], streamingRunner, isRoot);
   return true;
 }
@@ -301,6 +304,10 @@ async function isServiceLoaded(captureRunner: CaptureRunner, isRoot: IsRoot): Pr
     isRoot
   );
   return result.code === 0;
+}
+
+async function clearServiceLogBeforeStart(streamingRunner: StreamingRunner, isRoot: IsRoot): Promise<void> {
+  await runPrivilegedStreaming("rm", ["-f", SERVICE_LOG_PATH], streamingRunner, isRoot);
 }
 
 function buildPrivilegedInvocation(

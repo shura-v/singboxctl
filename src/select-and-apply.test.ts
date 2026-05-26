@@ -26,18 +26,18 @@ describe("select-and-apply module", () => {
     await addConnection("Work", VALID_VLESS_URI);
     await addProfile("Office");
     await addRuleSet("Services");
-    await setProfileRuleSets("office", ["services"]);
+    await setProfileRuleSets("Office", ["Services"]);
 
-    const selection = await selectAndApplyByName("work", "office");
+    const selection = await selectAndApplyByName("Work", "Office");
 
     expect(selection).toMatchObject({
-      connectionName: "work",
-      profileName: "office",
+      connectionName: "Work",
+      profileName: "Office",
       configPath: join(getDataDirectoryPath(), "config.json")
     });
     expect(await getActiveSelection()).toEqual({
-      connectionName: "work",
-      profileName: "office"
+      connectionName: "Work",
+      profileName: "Office"
     });
 
     const configJson = JSON.parse(await readFile(selection.configPath, "utf8")) as {
@@ -99,8 +99,8 @@ describe("select-and-apply module", () => {
     await addProfile("Office");
 
     await expect(listSelectableOptions()).resolves.toEqual({
-      connections: [{ name: "work" }],
-      profiles: [{ name: "office" }, { name: FULL_TUNNEL_PROFILE_NAME }]
+      connections: [{ name: "Work" }],
+      profiles: [{ name: "Office" }, { name: FULL_TUNNEL_PROFILE_NAME }]
     });
   });
 
@@ -112,19 +112,19 @@ describe("select-and-apply module", () => {
     );
     await addProfile("Office");
     await addRuleSet("Services");
-    await addRulesToRuleSet("services", "domain:openai.com");
-    await setProfileRuleSets("office", ["services"]);
-    const applied = await selectAndApplyByName("work", "office");
+    await addRulesToRuleSet("Services", "domain:openai.com");
+    await setProfileRuleSets("Office", ["Services"]);
+    const applied = await selectAndApplyByName("Work", "Office");
     const previousConfigJson = await readFile(applied.configPath, "utf8");
 
-    await expect(selectAndApplyByName("broken", "office")).rejects.toThrow(
+    await expect(selectAndApplyByName("Broken", "Office")).rejects.toThrow(
       'Unsupported VLESS encryption "bad". Only none is supported right now.'
     );
 
     expect(await readFile(getGeneratedConfigPath(), "utf8")).toBe(previousConfigJson);
     expect(await getActiveSelection()).toEqual({
-      connectionName: "work",
-      profileName: "office"
+      connectionName: "Work",
+      profileName: "Office"
     });
   });
 });

@@ -68,6 +68,10 @@ describe("service module", () => {
       },
       {
         command: "sudo",
+        args: ["rm", "-f", "/var/log/singboxctl.log"]
+      },
+      {
+        command: "sudo",
         args: ["launchctl", "bootstrap", "system", "/Library/LaunchDaemons/io.shura.singboxctl.plist"]
       }
     ]);
@@ -115,6 +119,10 @@ describe("service module", () => {
       {
         command: "sudo",
         args: ["launchctl", "enable", "system/io.shura.singboxctl"]
+      },
+      {
+        command: "sudo",
+        args: ["rm", "-f", "/var/log/singboxctl.log"]
       },
       {
         command: "sudo",
@@ -190,10 +198,18 @@ describe("service module", () => {
     ]);
   });
 
-  it("fails clearly when clearing a missing service log file", async () => {
-    await expect(clearServiceLogs(async () => {}, () => false, async () => false)).rejects.toThrow(
-      "Service log not found at /var/log/singboxctl.log."
+  it("does nothing when clearing service logs and the log file is missing", async () => {
+    const calls: Array<{ args: string[]; command: string }> = [];
+
+    await clearServiceLogs(
+      async (command, args) => {
+        calls.push({ command, args });
+      },
+      () => false,
+      async () => false
     );
+
+    expect(calls).toEqual([]);
   });
 
   it("does not restart a missing service", async () => {
@@ -238,6 +254,10 @@ describe("service module", () => {
       },
       {
         command: "sudo",
+        args: ["rm", "-f", "/var/log/singboxctl.log"]
+      },
+      {
+        command: "sudo",
         args: ["launchctl", "kickstart", "-k", "system/io.shura.singboxctl"]
       }
     ]);
@@ -271,6 +291,10 @@ describe("service module", () => {
       {
         command: "sudo",
         args: ["launchctl", "print", "system/io.shura.singboxctl"]
+      },
+      {
+        command: "sudo",
+        args: ["rm", "-f", "/var/log/singboxctl.log"]
       },
       {
         command: "sudo",

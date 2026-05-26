@@ -28,12 +28,12 @@ describe("sing-box config builder", () => {
     await addProfile("Office");
     await addRuleSet("Services");
     await addRulesToRuleSet(
-      "services",
+      "Services",
       "domain:openai.com\ndomain_suffix:chatgpt.com\ndomain_suffix:openai.com\nip_cidr:1.2.3.0/24"
     );
-    await setProfileRuleSets("office", ["services"]);
+    await setProfileRuleSets("Office", ["Services"]);
 
-    const result = await buildAndWriteGeneratedConfig("work", "office");
+    const result = await buildAndWriteGeneratedConfig("Work", "Office");
 
     expect(result.configPath).toBe(getGeneratedConfigPath());
     expect(result.config.route.rules).toEqual([
@@ -143,7 +143,7 @@ describe("sing-box config builder", () => {
   it("routes all non-private traffic through proxy for the built-in full-tunnel profile", async () => {
     await addConnection("Work", VALID_VLESS_URI);
 
-    const result = await buildAndWriteGeneratedConfig("work", FULL_TUNNEL_PROFILE_NAME);
+    const result = await buildAndWriteGeneratedConfig("Work", FULL_TUNNEL_PROFILE_NAME);
 
     expect(result.config.route.final).toBe("proxy");
     expect(result.config.route.rules).toEqual([
@@ -167,7 +167,7 @@ describe("sing-box config builder", () => {
     await addProfile("Office");
     await setIpv6Enabled(true);
 
-    const result = await buildAndWriteGeneratedConfig("work", "office");
+    const result = await buildAndWriteGeneratedConfig("Work", "Office");
     const writtenConfig = JSON.parse(await readFile(result.configPath, "utf8")) as {
       inbounds: Array<{ address: string[]; tag: string; type: string }>;
     };
@@ -189,7 +189,7 @@ describe("sing-box config builder", () => {
     await addProfile("Office");
     await setLogLevel("debug");
 
-    const result = await buildAndWriteGeneratedConfig("work", "office");
+    const result = await buildAndWriteGeneratedConfig("Work", "Office");
     const writtenConfig = JSON.parse(await readFile(result.configPath, "utf8")) as {
       log: { level: string; timestamp: boolean };
     };

@@ -1,4 +1,5 @@
 import {
+  type ActiveSelectionRuntimeResult,
   applyActiveSelection,
   getActiveConnectionName,
   getActiveProfileName,
@@ -11,14 +12,17 @@ export type ActiveSelection = {
   profileName?: string;
 };
 
-export async function selectAndApplyByName(
-  connectionName: string,
-  profileName: string
-): Promise<{
+export type SelectAndApplyResult = ActiveSelectionRuntimeResult & {
+  activeSelectionComplete: true;
   configPath: string;
   connectionName: string;
   profileName: string;
-}> {
+};
+
+export async function selectAndApplyByName(
+  connectionName: string,
+  profileName: string
+): Promise<SelectAndApplyResult> {
   const result = await applyActiveSelection(connectionName, profileName);
 
   if (!result.activeSelectionComplete || !result.configPath) {
@@ -26,7 +30,12 @@ export async function selectAndApplyByName(
   }
 
   return {
+    activeSelectionComplete: true,
     configPath: result.configPath,
+    disabledService: result.disabledService,
+    removedGeneratedConfig: result.removedGeneratedConfig,
+    restartedService: result.restartedService,
+    stoppedService: result.stoppedService,
     connectionName,
     profileName
   };
