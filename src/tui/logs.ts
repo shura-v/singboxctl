@@ -1,11 +1,17 @@
 import { log } from "@clack/prompts";
 import { FriendlyMessageError, promptSelect } from "../cli.js";
-import { clearServiceLogs, getServiceLogPath, openServiceLogs } from "../service.js";
+import {
+  clearServiceLogs,
+  getServiceLogPath,
+  openGeneratedConfigDirectory,
+  openServiceLogs
+} from "../service.js";
+import { getGeneratedConfigPath } from "../store.js";
 import { getLogLevel, setLogLevel, type LogLevel } from "../store.js";
 import { runChildMenuLoop } from "./menu-loop.js";
 import { runAndLogRuntimeRefresh } from "./shared.js";
 
-type LogsAction = "back" | "clear" | "open" | "set-level";
+type LogsAction = "back" | "clear" | "open" | "open-config-folder" | "set-level";
 
 const LOG_LEVELS: LogLevel[] = ["trace", "debug", "info", "warn", "error", "fatal", "panic"];
 
@@ -25,6 +31,11 @@ export async function runLogsMenu(): Promise<void> {
             value: "clear",
             label: "Clear",
             hint: "Truncate the service log file"
+          },
+          {
+            value: "open-config-folder",
+            label: "Open config folder",
+            hint: "Open the singboxctl config directory in Finder"
           },
           {
             value: "set-level",
@@ -47,6 +58,9 @@ export async function runLogsMenu(): Promise<void> {
         case "clear":
           await runLogsClear();
           return "continue";
+        case "open-config-folder":
+          await runOpenConfigFolder();
+          return "continue";
         case "set-level":
           await runSetLogLevel();
           return "continue";
@@ -66,6 +80,11 @@ async function runLogsClear(): Promise<void> {
   log.step("Clearing service log. You may be asked for your macOS password.");
   await clearServiceLogs();
   log.success(`Cleared ${getServiceLogPath()}.`);
+}
+
+async function runOpenConfigFolder(): Promise<void> {
+  await openGeneratedConfigDirectory();
+  log.success(`Opened ${getGeneratedConfigPath()} parent folder in Finder.`);
 }
 
 async function runSetLogLevel(): Promise<void> {

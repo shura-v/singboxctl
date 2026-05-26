@@ -1,6 +1,6 @@
 import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { FriendlyMessageError } from "./cli.js";
 import { runCommandCapture, runCommandStreaming, resolveCommandPath, type CommandResult } from "./process.js";
 import { getGeneratedConfigPath } from "./store.js";
@@ -50,6 +50,12 @@ export async function openServiceLogs(
   }
 
   await streamingRunner("open", ["-a", "Console", SERVICE_LOG_PATH]);
+}
+
+export async function openGeneratedConfigDirectory(
+  streamingRunner: StreamingRunner = runCommandStreaming
+): Promise<void> {
+  await streamingRunner("open", [dirname(getGeneratedConfigPath())]);
 }
 
 export async function clearServiceLogs(

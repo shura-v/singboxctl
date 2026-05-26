@@ -9,6 +9,7 @@ import {
   disableServiceIfInstalled,
   getServiceStatus,
   installService,
+  openGeneratedConfigDirectory,
   openServiceLogs,
   restartServiceIfInstalled,
   stopServiceIfInstalled
@@ -173,6 +174,21 @@ describe("service module", () => {
     await expect(openServiceLogs(async () => {}, async () => false)).rejects.toThrow(
       "Service log not found at /var/log/singboxctl.log."
     );
+  });
+
+  it("opens the generated config directory in Finder", async () => {
+    const calls: Array<{ args: string[]; command: string }> = [];
+
+    await openGeneratedConfigDirectory(async (command, args) => {
+      calls.push({ command, args });
+    });
+
+    expect(calls).toEqual([
+      {
+        command: "open",
+        args: [join(process.env.HOME!, ".config", "singboxctl")]
+      }
+    ]);
   });
 
   it("clears the service log using a privileged truncate command", async () => {
