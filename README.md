@@ -43,8 +43,6 @@ For Hysteria2 URIs, the auth value is read from the URI userinfo segment:
 
 `hysteria2://<auth>@example.com:443?...`
 
-`user:pass@` style auth is intentionally rejected. If the auth value itself contains `:`, it must be percent-encoded as `%3A`.
-
 Provider links in the wild may also include extra Hysteria2 parameters such as `fp`. Provider-link fields are documented separately from guaranteed generated `sing-box` runtime support: if a field is not listed above in the supported subset, do not assume it is applied to `config.json` just because it appears in a provider URI.
 
 Unsupported Hysteria2 features fail explicitly.
