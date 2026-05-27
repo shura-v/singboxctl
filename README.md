@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/shura-v/singboxctl/actions/workflows/ci.yml/badge.svg)](https://github.com/shura-v/singboxctl/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/singboxctl.svg)](https://www.npmjs.com/package/singboxctl)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/shura-v/singboxctl/main/LICENSE)
 
 ![singboxctl TUI screenshot](https://raw.githubusercontent.com/shura-v/singboxctl/main/docs/usage.png)
 
