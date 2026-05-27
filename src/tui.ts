@@ -77,14 +77,14 @@ export async function runTui(context: AppContext): Promise<void> {
             hint: "Manage routing profiles"
           },
           {
-            value: "ipv6",
-            label: "IPv6",
-            hint: ipv6Enabled ? "Enabled for TUN inbounds" : "Disabled for TUN inbounds"
-          },
-          {
             value: "rule-sets",
             label: "Rule Sets",
             hint: "Manage named sing-box rule groups"
+          },
+          {
+            value: "ipv6",
+            label: "IPv6",
+            hint: ipv6Enabled ? "Enabled for TUN inbounds" : "Disabled for TUN inbounds"
           },
           {
             value: "section-system",
