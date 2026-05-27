@@ -1,12 +1,24 @@
 # singboxctl
 
-`singboxctl` currently supports macOS only.
-
 `singboxctl` is a TUI for managing:
 
 - Xray-compatible connection URIs
 - routing profiles
 - `sing-box` match rules
+
+## Current Limitations
+
+### singboxctl limitations
+
+- macOS only
+- connection import currently supports `vless://` URIs only
+- supported rule formats are currently `domain:...`, `domain_suffix:...`, and `ip_cidr:...`
+- unsupported URI or rule features fail explicitly instead of being guessed
+
+### Current sing-box-related subset
+
+- connection import currently supports a narrow VLESS URI subset
+- currently supported VLESS URI subset: `type=tcp`, `security=none|reality`, and REALITY `flow=xtls-rprx-vision`
 
 ## Install
 
@@ -60,7 +72,6 @@ The current TUI includes:
 
 - `Connections` store raw Xray-compatible URIs.
 - `Rule Sets` store named groups of rules. The rule-set file name is the source of truth for the rule-set name.
-- Supported rule formats are currently `domain:...`, `domain_suffix:...`, and `ip_cidr:...`.
 - `Profiles` select which rule sets should be active.
 - `Select connection and profile` validates the selected connection with the built-in VLESS parser, writes a generated TUN config to `~/.config/singboxctl/config.json`, and refreshes the running service when needed.
 - `Connect in terminal` starts `sing-box` in the foreground using the currently applied `~/.config/singboxctl/config.json` and prints logs in the current terminal. This is mainly useful for debugging.
