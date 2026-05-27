@@ -1,5 +1,7 @@
 # singboxctl
 
+![singboxctl TUI screenshot](https://raw.githubusercontent.com/shura-v/singboxctl/main/docs/usage.png)
+
 `singboxctl` is a TUI for managing:
 
 - Xray-compatible connection URIs
