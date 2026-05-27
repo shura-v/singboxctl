@@ -1,1 +1,1 @@
-export type { AppService, ServiceInstallResult, ServiceManagerInfo, ServiceStatus } from "./app-context.js";
+export type { AppLogs, AppService, ServiceInstallResult, ServiceLogsInfo, ServiceManagerInfo, ServiceStatus } from "./app-context.js";

@@ -4,11 +4,13 @@ import { dirname, join } from "node:path";
 import { FriendlyMessageError } from "../cli.js";
 import type {
   AppContext,
+  AppLogs,
   AppRunner,
   AppService,
   DesktopOpener,
   ForegroundConnectResult,
   ServiceInstallResult,
+  ServiceLogsInfo,
   ServiceManagerInfo,
   ServiceStatus
 } from "../app-context.js";
@@ -74,35 +76,12 @@ export class MacOSServiceManager implements AppService {
       definitionPath: SERVICE_PLIST_PATH,
       displayName: "launchd service",
       label: SERVICE_LABEL,
-      logPath: SERVICE_LOG_PATH,
-      logViewerName: "Console",
       privilegePrompt: "macOS password"
     };
   }
 
-  async openLogs(): Promise<void> {
-    const { logPath } = this.getInfo();
-
-    if (!(await this.fileExistsChecker()(logPath))) {
-      throw new FriendlyMessageError(`Service log not found at ${logPath}.`);
-    }
-
-    await this.desktopOpener.openServiceLogs(logPath);
-  }
-
   async openConfigDirectory(): Promise<void> {
     await this.desktopOpener.openDirectory(dirname(getGeneratedConfigPath()));
-  }
-
-  async clearLogs(): Promise<void> {
-    const { logPath } = this.getInfo();
-
-    if (!(await this.fileExistsChecker()(logPath))) {
-      return;
-    }
-
-    await ensureSudoSession(this.streamingRunner(), this.isRoot());
-    await runPrivilegedStreaming("truncate", ["-s", "0", logPath], this.streamingRunner(), this.isRoot());
   }
 
   async install(): Promise<ServiceInstallResult> {
@@ -128,7 +107,7 @@ export class MacOSServiceManager implements AppService {
       await runPrivilegedStreaming("chown", ["root:wheel", service.definitionPath], this.streamingRunner(), this.isRoot());
       await runPrivilegedStreaming("chmod", ["644", service.definitionPath], this.streamingRunner(), this.isRoot());
       await runPrivilegedStreaming("launchctl", ["enable", `system/${service.label}`], this.streamingRunner(), this.isRoot());
-      await clearServiceLogBeforeStart(this.streamingRunner(), this.isRoot(), service.logPath);
+      await clearServiceLogBeforeStart(this.streamingRunner(), this.isRoot(), SERVICE_LOG_PATH);
       await runPrivilegedStreaming(
         "launchctl",
         ["bootstrap", "system", service.definitionPath],
@@ -204,7 +183,7 @@ export class MacOSServiceManager implements AppService {
     await runPrivilegedStreaming("launchctl", ["enable", `system/${service.label}`], this.streamingRunner(), this.isRoot());
 
     if (await isServiceLoaded(this.captureRunner(), this.isRoot(), service.label)) {
-      await clearServiceLogBeforeStart(this.streamingRunner(), this.isRoot(), service.logPath);
+      await clearServiceLogBeforeStart(this.streamingRunner(), this.isRoot(), SERVICE_LOG_PATH);
       await runPrivilegedStreaming(
         "launchctl",
         ["kickstart", "-k", `system/${service.label}`],
@@ -214,7 +193,7 @@ export class MacOSServiceManager implements AppService {
       return true;
     }
 
-    await clearServiceLogBeforeStart(this.streamingRunner(), this.isRoot(), service.logPath);
+    await clearServiceLogBeforeStart(this.streamingRunner(), this.isRoot(), SERVICE_LOG_PATH);
     await runPrivilegedStreaming(
       "launchctl",
       ["bootstrap", "system", service.definitionPath],
@@ -280,6 +259,55 @@ export class MacOSServiceManager implements AppService {
   }
 }
 
+export class MacOSLogs implements AppLogs {
+  private readonly desktopOpener: DesktopOpener;
+
+  constructor(
+    private readonly options: MacOSPlatformRuntimeOptions & {
+      desktopOpener?: DesktopOpener;
+    } = {}
+  ) {
+    this.desktopOpener = options.desktopOpener ?? new MacOSDesktopOpener(options.streamingRunner);
+  }
+
+  getInfo(): ServiceLogsInfo {
+    return getMacOSLogsInfo();
+  }
+
+  async open(): Promise<void> {
+    const { path } = this.getInfo();
+
+    if (!(await this.fileExistsChecker()(path))) {
+      throw new FriendlyMessageError(`Service log not found at ${path}.`);
+    }
+
+    await this.desktopOpener.openServiceLogs(path);
+  }
+
+  async clear(): Promise<void> {
+    const { path } = this.getInfo();
+
+    if (!(await this.fileExistsChecker()(path))) {
+      return;
+    }
+
+    await ensureSudoSession(this.streamingRunner(), this.isRoot());
+    await runPrivilegedStreaming("truncate", ["-s", "0", path], this.streamingRunner(), this.isRoot());
+  }
+
+  private fileExistsChecker(): FileExistsChecker {
+    return this.options.fileExistsChecker ?? fileExists;
+  }
+
+  private isRoot(): IsRoot {
+    return this.options.isRoot ?? isProcessRoot;
+  }
+
+  private streamingRunner(): StreamingRunner {
+    return this.options.streamingRunner ?? runCommandStreaming;
+  }
+}
+
 export class MacOSRunner implements AppRunner {
   constructor(
     private readonly options: {
@@ -319,6 +347,10 @@ export function createMacOSAppContext(options: MacOSPlatformRuntimeOptions = {})
 
   return {
     desktop: desktopOpener,
+    logs: new MacOSLogs({
+      ...options,
+      desktopOpener
+    }),
     runner: new MacOSRunner({
       isRoot: options.isRoot,
       pathResolver: options.pathResolver,
@@ -456,6 +488,13 @@ function escapeXml(value: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&apos;");
+}
+
+function getMacOSLogsInfo(): ServiceLogsInfo {
+  return {
+    path: SERVICE_LOG_PATH,
+    viewerName: "Console"
+  };
 }
 
 export function buildSingBoxRunInvocation(

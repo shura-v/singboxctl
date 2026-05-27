@@ -69,6 +69,7 @@ async function runServiceRemove(context: AppContext): Promise<void> {
 
 async function runServiceStatus(context: AppContext): Promise<void> {
   const status = await context.service.getStatus();
+  const logsInfo = context.logs.getInfo();
 
   if (!status.installed) {
     throw new FriendlyMessageError("Auto-start is not enabled.");
@@ -78,5 +79,5 @@ async function runServiceStatus(context: AppContext): Promise<void> {
   log.info(`${status.service.definitionLabel}: ${status.service.definitionPath}`);
   log.info(`Config: ${status.configPath}`);
   log.info(`Loaded: ${status.loaded ? "yes" : "no"}`);
-  log.info(`Log: ${status.service.logPath}`);
+  log.info(`Log: ${logsInfo.path}`);
 }

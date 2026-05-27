@@ -128,7 +128,7 @@ describe("service module", () => {
       }
     });
 
-    await context.service.openLogs();
+    await context.logs.open();
 
     expect(calls).toEqual([{ command: "open", args: ["-a", "Console", "/var/log/singboxctl.log"] }]);
   });
@@ -139,7 +139,7 @@ describe("service module", () => {
       streamingRunner: async () => {}
     });
 
-    await expect(context.service.openLogs()).rejects.toThrow("Service log not found at /var/log/singboxctl.log.");
+    await expect(context.logs.open()).rejects.toThrow("Service log not found at /var/log/singboxctl.log.");
   });
 
   it("opens the generated config directory in Finder", async () => {
@@ -188,7 +188,7 @@ describe("service module", () => {
       }
     });
 
-    await context.service.clearLogs();
+    await context.logs.clear();
 
     expect(calls).toEqual([
       { command: "sudo", args: ["-v"] },
@@ -206,7 +206,7 @@ describe("service module", () => {
       }
     });
 
-    await context.service.clearLogs();
+    await context.logs.clear();
     expect(calls).toEqual([]);
   });
 

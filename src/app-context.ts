@@ -4,9 +4,12 @@ export type ServiceManagerInfo = {
   definitionPath: string;
   displayName: string;
   label: string;
-  logPath: string;
-  logViewerName: string;
   privilegePrompt: string;
+};
+
+export type ServiceLogsInfo = {
+  path: string;
+  viewerName: string;
 };
 
 export type ServiceStatus = {
@@ -22,16 +25,20 @@ export type ServiceInstallResult = {
 };
 
 export interface AppService {
-  clearLogs(): Promise<void>;
   disableIfInstalled(): Promise<boolean>;
   getInfo(): ServiceManagerInfo;
   getStatus(): Promise<ServiceStatus>;
   install(): Promise<ServiceInstallResult>;
   openConfigDirectory(): Promise<void>;
-  openLogs(): Promise<void>;
   restartIfInstalled(): Promise<boolean>;
   stopIfInstalled(): Promise<boolean>;
   uninstall(): Promise<void>;
+}
+
+export interface AppLogs {
+  clear(): Promise<void>;
+  getInfo(): ServiceLogsInfo;
+  open(): Promise<void>;
 }
 
 export interface DesktopOpener {
@@ -51,6 +58,7 @@ export interface AppRunner {
 export interface AppContext {
   assertRuntimePrerequisitesInstalled(): Promise<void>;
   desktop: DesktopOpener;
+  logs: AppLogs;
   runner: AppRunner;
   service: AppService;
 }

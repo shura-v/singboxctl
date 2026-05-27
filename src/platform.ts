@@ -3,6 +3,7 @@ import type { AppContext } from "./app-context.js";
 import { createMacOSAppContext } from "./platform/macos.js";
 
 export type {
+  AppLogs,
   AppContext,
   AppRunner,
   AppService,
@@ -10,6 +11,7 @@ export type {
   ForegroundConnectResult,
   RuntimeDependencies,
   ServiceInstallResult,
+  ServiceLogsInfo,
   ServiceManagerInfo,
   ServiceStatus
 } from "./app-context.js";

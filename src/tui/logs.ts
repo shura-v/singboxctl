@@ -15,13 +15,14 @@ export async function runLogsMenu(context: AppContext): Promise<void> {
     select: async () => {
       const currentLogLevel = await getLogLevel();
       const serviceInfo = context.service.getInfo();
+      const logsInfo = context.logs.getInfo();
 
       return promptSelect<LogsAction>(
         [
           {
             value: "open",
             label: "Open",
-            hint: `Open the service log in ${serviceInfo.logViewerName}`
+            hint: `Open the service log in ${logsInfo.viewerName}`
           },
           {
             value: "clear",
@@ -68,16 +69,17 @@ export async function runLogsMenu(context: AppContext): Promise<void> {
 }
 
 async function runLogsOpen(context: AppContext): Promise<void> {
-  const serviceInfo = context.service.getInfo();
-  await context.service.openLogs();
-  log.success(`Opened ${serviceInfo.logPath} in ${serviceInfo.logViewerName}.`);
+  const logsInfo = context.logs.getInfo();
+  await context.logs.open();
+  log.success(`Opened ${logsInfo.path} in ${logsInfo.viewerName}.`);
 }
 
 async function runLogsClear(context: AppContext): Promise<void> {
   const serviceInfo = context.service.getInfo();
+  const logsInfo = context.logs.getInfo();
   log.step(`Clearing service log. You may be asked for your ${serviceInfo.privilegePrompt}.`);
-  await context.service.clearLogs();
-  log.success(`Cleared ${serviceInfo.logPath}.`);
+  await context.logs.clear();
+  log.success(`Cleared ${logsInfo.path}.`);
 }
 
 async function runOpenConfigFolder(context: AppContext): Promise<void> {

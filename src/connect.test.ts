@@ -12,13 +12,11 @@ function makeServiceStatus(overrides: Partial<ServiceStatus> = {}): ServiceStatu
     installed: false,
     loaded: false,
     service: {
-      configDirectoryViewerName: "Finder",
       definitionLabel: "Plist",
       definitionPath: "/Library/LaunchDaemons/io.shura.singboxctl.plist",
+      configDirectoryViewerName: "Finder",
       displayName: "launchd service",
       label: "io.shura.singboxctl",
-      logPath: "/var/log/singboxctl.log",
-      logViewerName: "Console",
       privilegePrompt: "macOS password"
     },
     ...overrides
@@ -35,7 +33,6 @@ describe("connect module", () => {
       connect: async () => ({ command: "sudo /opt/homebrew/bin/sing-box run --disable-color -c /tmp/config.json" })
     },
     service: {
-      clearLogs: async () => {},
       disableIfInstalled: async () => false,
       getInfo: () => makeServiceStatus().service,
       getStatus: async () => makeServiceStatus(),
@@ -43,7 +40,6 @@ describe("connect module", () => {
         throw new Error("not used");
       },
       openConfigDirectory: async () => {},
-      openLogs: async () => {},
       restartIfInstalled: async () => false,
       stopIfInstalled: async () => false,
       uninstall: async () => {}
