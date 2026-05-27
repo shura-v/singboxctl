@@ -4,6 +4,8 @@
 [![npm version](https://img.shields.io/npm/v/singboxctl.svg)](https://www.npmjs.com/package/singboxctl)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+![singboxctl TUI screenshot](https://raw.githubusercontent.com/shura-v/singboxctl/main/docs/usage.png)
+
 `singboxctl` is a TUI for managing:
 
 - Xray-compatible connection URIs

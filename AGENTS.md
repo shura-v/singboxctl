@@ -7,3 +7,5 @@
 - We currently own a narrow custom parser for the project's target Xray formats.
 - Prefer small, explicit parsers for the exact protocols and fields we support over generic "parse everything" logic.
 - If a URI/config feature is not supported by our parser yet, fail clearly instead of guessing.
+- Releases are published only from CI.
+- Locally we only create changesets; do not perform manual package releases from this repository.
