@@ -14,17 +14,40 @@
 
 ## Current Limitations
 
-### singboxctl limitations
-
 - macOS only
-- connection import currently supports `vless://` URIs only
-- supported rule formats are currently `domain:...`, `domain_suffix:...`, and `ip_cidr:...`
-- unsupported URI or rule features fail explicitly instead of being guessed
+- Connection import currently supports a narrow subset of `vless://` and `hysteria2://` URIs
+- Supported rule formats are currently `domain:...`, `domain_suffix:...`, and `ip_cidr:...`
+- Unsupported URI or rule features fail explicitly instead of being guessed
 
-### Current sing-box-related subset
+### Supported URI subset
 
-- connection import currently supports a narrow VLESS URI subset
-- currently supported VLESS URI subset: `type=tcp`, `security=none|reality`, and REALITY `flow=xtls-rprx-vision`
+#### VLESS
+
+Currently supported:
+
+- `type=tcp`
+- `security=none|reality`
+- REALITY with `flow=xtls-rprx-vision`
+
+Unsupported VLESS features fail explicitly.
+
+#### Hysteria2
+
+Currently supported:
+
+- `security=tls`
+- optional `sni`
+- `alpn=h2|h3`
+
+For Hysteria2 URIs, the auth value is read from the URI userinfo segment:
+
+`hysteria2://<auth>@example.com:443?...`
+
+`user:pass@` style auth is intentionally rejected. If the auth value itself contains `:`, it must be percent-encoded as `%3A`.
+
+Provider links in the wild may also include extra Hysteria2 parameters such as `fp`. Provider-link fields are documented separately from guaranteed generated `sing-box` runtime support: if a field is not listed above in the supported subset, do not assume it is applied to `config.json` just because it appears in a provider URI.
+
+Unsupported Hysteria2 features fail explicitly.
 
 ## Install
 
@@ -79,7 +102,7 @@ The current TUI includes:
 - `Connections` store raw Xray-compatible URIs.
 - `Rule Sets` store named groups of rules. The rule-set file name is the source of truth for the rule-set name.
 - `Profiles` select which rule sets should be active.
-- `Select connection and profile` validates the selected connection with the built-in VLESS parser, writes a generated TUN config to `~/.config/singboxctl/config.json`, and refreshes the running service when needed.
+- `Select connection and profile` validates the selected connection with the built-in URI parsers, writes a generated TUN config to `~/.config/singboxctl/config.json`, and refreshes the running service when needed.
 - `Connect in terminal` starts `sing-box` in the foreground using the currently applied `~/.config/singboxctl/config.json` and prints logs in the current terminal. This is mainly useful for debugging.
 - `Logs` opens or clears `/var/log/singboxctl.log` and lets you change the `sing-box` log level.
 - `Auto-start in background` enables or disables running `sing-box` in the background now and on future startups.

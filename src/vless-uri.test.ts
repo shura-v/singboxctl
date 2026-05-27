@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseVlessUriToSingBoxOutbound, validateConnectionUri } from "./vless-uri/index.js";
+import { parseVlessUriToSingBoxOutbound, validateVlessConnectionUri } from "./vless-uri/index.js";
 
 describe("vless uri parser", () => {
   it("parses a tcp reality vision URI into a sing-box outbound", () => {

@@ -12,7 +12,7 @@ import {
   type ConnectionRecord,
   type ProfileRecord
 } from "./store.js";
-import { parseVlessUriToSingBoxOutbound } from "./vless-uri/index.js";
+import { parseConnectionUriToSingBoxOutbound } from "./connection-uri.js";
 
 type ProxyRouteRule = {
   action: "route";
@@ -85,7 +85,7 @@ export async function buildSingBoxConfig(
   connection: ConnectionRecord,
   profile: ProfileRecord
 ): Promise<SingBoxConfig> {
-  const proxyOutbound = parseVlessUriToSingBoxOutbound(connection.uri);
+  const proxyOutbound = parseConnectionUriToSingBoxOutbound(connection.uri);
   const [ipv6Enabled, logLevel] = await Promise.all([getIpv6Enabled(), getLogLevel()]);
   const profileRules = profile.builtIn ? [] : await readProfileRules(profile);
   const rules = [
