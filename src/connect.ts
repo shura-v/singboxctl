@@ -1,11 +1,8 @@
 import type { AppContext, ServiceStatus } from "./app-context.js";
 import { FriendlyMessageError } from "./cli.js";
-import { resolveCommandPath, runCommandStreaming } from "./process.js";
 import { getGeneratedConfigPath } from "./store.js";
 import { access } from "node:fs/promises";
 
-type StreamingRunner = (command: string, args: string[]) => Promise<void>;
-type PathResolver = (command: string) => Promise<string>;
 type ServiceStatusGetter = () => Promise<ServiceStatus>;
 
 export type ConnectResult = {
@@ -14,36 +11,17 @@ export type ConnectResult = {
 };
 
 export async function connect(
-  context: Pick<AppContext, "service">,
-  streamingRunner: StreamingRunner = runCommandStreaming,
-  pathResolver: PathResolver = resolveCommandPath,
+  context: Pick<AppContext, "runner" | "service">,
   serviceStatusGetter: ServiceStatusGetter = () => context.service.getStatus()
 ): Promise<ConnectResult> {
   const configPath = getGeneratedConfigPath();
   await assertConfigExists(configPath);
   await assertServiceNotLoaded(serviceStatusGetter);
-  const singBoxPath = await pathResolver("sing-box");
-  const invocation = buildSingBoxRunInvocation(configPath, singBoxPath);
-
-  await streamingRunner(invocation.command, invocation.args);
+  const result = await context.runner.connect(configPath);
 
   return {
-    command: [invocation.command, ...invocation.args].join(" "),
+    command: result.command,
     configPath
-  };
-}
-
-export function buildSingBoxRunInvocation(configPath: string, singBoxPath: string): { args: string[]; command: string } {
-  if (typeof process.getuid === "function" && process.getuid() === 0) {
-    return {
-      command: singBoxPath,
-      args: ["run", "--disable-color", "-c", configPath]
-    };
-  }
-
-  return {
-    command: "sudo",
-    args: [singBoxPath, "run", "--disable-color", "-c", configPath]
   };
 }
 

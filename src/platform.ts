@@ -4,8 +4,10 @@ import { createMacOSAppContext } from "./platform/macos.js";
 
 export type {
   AppContext,
+  AppRunner,
   AppService,
   DesktopOpener,
+  ForegroundConnectResult,
   RuntimeDependencies,
   ServiceInstallResult,
   ServiceManagerInfo,
@@ -13,14 +15,21 @@ export type {
 } from "./app-context.js";
 
 export function ensureSupportedPlatform(): void {
-  if (process.platform !== "darwin") {
-    throw new FriendlyMessageError("singboxctl currently supports only macOS.");
+  switch (process.platform) {
+    case "darwin":
+      return;
+    default:
+      throw new FriendlyMessageError(`Platform not implemented yet: ${process.platform}.`);
   }
 }
 
 export function createAppContext(): AppContext {
-  ensureSupportedPlatform();
-  return createMacOSAppContext();
+  switch (process.platform) {
+    case "darwin":
+      return createMacOSAppContext();
+    default:
+      throw new FriendlyMessageError(`Platform not implemented yet: ${process.platform}.`);
+  }
 }
 
 export const ensureMacOS = ensureSupportedPlatform;

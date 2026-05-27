@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { AppContext, ServiceStatus } from "./app-context.js";
+import { connect } from "./connect.js";
 import { ensureDataDirectories, getGeneratedConfigPath } from "./store.js";
-import { buildSingBoxRunInvocation, connect } from "./connect.js";
 
 function makeServiceStatus(overrides: Partial<ServiceStatus> = {}): ServiceStatus {
   return {
@@ -30,7 +30,10 @@ describe("connect module", () => {
     process.env.HOME = await mkdtemp(join(tmpdir(), "singboxctl-run-test-"));
   });
 
-  const context: Pick<AppContext, "service"> = {
+  const context: Pick<AppContext, "runner" | "service"> = {
+    runner: {
+      connect: async () => ({ command: "sudo /opt/homebrew/bin/sing-box run --disable-color -c /tmp/config.json" })
+    },
     service: {
       clearLogs: async () => {},
       disableIfInstalled: async () => false,
@@ -52,26 +55,31 @@ describe("connect module", () => {
     const configPath = getGeneratedConfigPath();
     await writeFile(configPath, '{"log":{"level":"info"}}\n', "utf8");
 
-    const calls: Array<{ args: string[]; command: string }> = [];
+    const calls: string[] = [];
+    const contextWithRunner: Pick<AppContext, "runner" | "service"> = {
+      ...context,
+      runner: {
+        connect: async (configPath) => {
+          calls.push(configPath);
+          return {
+            command: `sudo /opt/homebrew/bin/sing-box run --disable-color -c ${configPath}`
+          };
+        }
+      }
+    };
 
-    const result = await connect(
-      context,
-      async (command, args) => {
-        calls.push({ command, args });
-      },
-      async () => "/opt/homebrew/bin/sing-box",
-      async () => makeServiceStatus()
-    );
+    const result = await connect(contextWithRunner, async () => makeServiceStatus());
 
     expect(calls).toHaveLength(1);
     expect(result.configPath).toBe(configPath);
-    expect(calls[0]).toEqual(buildSingBoxRunInvocation(result.configPath, "/opt/homebrew/bin/sing-box"));
+    expect(calls[0]).toBe(result.configPath);
+    expect(result.command).toBe(`sudo /opt/homebrew/bin/sing-box run --disable-color -c ${configPath}`);
   });
 
   it("fails when config.json does not exist yet", async () => {
-    await expect(
-      connect(context, async () => {}, async () => "/opt/homebrew/bin/sing-box", async () => makeServiceStatus())
-    ).rejects.toThrow("Config not found. Use Select & Apply first.");
+    await expect(connect(context, async () => makeServiceStatus())).rejects.toThrow(
+      "Config not found. Use Select & Apply first."
+    );
   });
 
   it("refuses foreground connect when the background service is already loaded", async () => {
@@ -82,8 +90,6 @@ describe("connect module", () => {
     await expect(
       connect(
         context,
-        async () => {},
-        async () => "/opt/homebrew/bin/sing-box",
         async () =>
           makeServiceStatus({
             installed: true,

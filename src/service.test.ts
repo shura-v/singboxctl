@@ -155,6 +155,29 @@ describe("service module", () => {
     expect(calls).toEqual([{ command: "open", args: [join(process.env.HOME!, ".config", "singboxctl")] }]);
   });
 
+  it("runs foreground sing-box through the injected runtime runner", async () => {
+    const calls: Array<{ args: string[]; command: string }> = [];
+    const context = createMacOSAppContext({
+      isRoot: () => false,
+      pathResolver: async () => "/opt/homebrew/bin/sing-box",
+      streamingRunner: async (command, args) => {
+        calls.push({ command, args });
+      }
+    });
+
+    const result = await context.runner.connect("/Users/test/.config/singboxctl/config.json");
+
+    expect(calls).toEqual([
+      {
+        command: "sudo",
+        args: ["/opt/homebrew/bin/sing-box", "run", "--disable-color", "-c", "/Users/test/.config/singboxctl/config.json"]
+      }
+    ]);
+    expect(result.command).toBe(
+      "sudo /opt/homebrew/bin/sing-box run --disable-color -c /Users/test/.config/singboxctl/config.json"
+    );
+  });
+
   it("clears the service log using a privileged truncate command", async () => {
     const calls: Array<{ args: string[]; command: string }> = [];
     const context = createMacOSAppContext({

@@ -40,9 +40,18 @@ export interface DesktopOpener {
   openServiceLogs(logPath: string): Promise<void>;
 }
 
+export type ForegroundConnectResult = {
+  command: string;
+};
+
+export interface AppRunner {
+  connect(configPath: string): Promise<ForegroundConnectResult>;
+}
+
 export interface AppContext {
   assertRuntimePrerequisitesInstalled(): Promise<void>;
   desktop: DesktopOpener;
+  runner: AppRunner;
   service: AppService;
 }
 

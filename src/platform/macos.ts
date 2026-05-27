@@ -4,8 +4,10 @@ import { dirname, join } from "node:path";
 import { FriendlyMessageError } from "../cli.js";
 import type {
   AppContext,
+  AppRunner,
   AppService,
   DesktopOpener,
+  ForegroundConnectResult,
   ServiceInstallResult,
   ServiceManagerInfo,
   ServiceStatus
@@ -278,12 +280,50 @@ export class MacOSServiceManager implements AppService {
   }
 }
 
+export class MacOSRunner implements AppRunner {
+  constructor(
+    private readonly options: {
+      isRoot?: IsRoot;
+      pathResolver?: PathResolver;
+      streamingRunner?: StreamingRunner;
+    } = {}
+  ) {}
+
+  async connect(configPath: string): Promise<ForegroundConnectResult> {
+    const singBoxPath = await this.pathResolver()("sing-box");
+    const invocation = buildSingBoxRunInvocation(configPath, singBoxPath, this.isRoot());
+
+    await this.streamingRunner()(invocation.command, invocation.args);
+
+    return {
+      command: [invocation.command, ...invocation.args].join(" ")
+    };
+  }
+
+  private pathResolver(): PathResolver {
+    return this.options.pathResolver ?? resolveCommandPath;
+  }
+
+  private isRoot(): IsRoot {
+    return this.options.isRoot ?? isProcessRoot;
+  }
+
+  private streamingRunner(): StreamingRunner {
+    return this.options.streamingRunner ?? runCommandStreaming;
+  }
+}
+
 export function createMacOSAppContext(options: MacOSPlatformRuntimeOptions = {}): AppContext {
   const desktopOpener = new MacOSDesktopOpener(options.streamingRunner);
   const pathResolver = options.pathResolver ?? resolveCommandPath;
 
   return {
     desktop: desktopOpener,
+    runner: new MacOSRunner({
+      isRoot: options.isRoot,
+      pathResolver: options.pathResolver,
+      streamingRunner: options.streamingRunner
+    }),
     service: new MacOSServiceManager({
       ...options,
       desktopOpener
@@ -416,4 +456,22 @@ function escapeXml(value: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&apos;");
+}
+
+export function buildSingBoxRunInvocation(
+  configPath: string,
+  singBoxPath: string,
+  isRoot: IsRoot = isProcessRoot
+): { args: string[]; command: string } {
+  if (isRoot()) {
+    return {
+      command: singBoxPath,
+      args: ["run", "--disable-color", "-c", configPath]
+    };
+  }
+
+  return {
+    command: "sudo",
+    args: [singBoxPath, "run", "--disable-color", "-c", configPath]
+  };
 }
