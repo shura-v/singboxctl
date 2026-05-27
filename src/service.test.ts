@@ -2,18 +2,8 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
+import { buildLaunchDaemonPlist, createMacOSAppContext } from "./platform/macos.js";
 import { ensureDataDirectories, getGeneratedConfigPath } from "./store.js";
-import {
-  buildLaunchDaemonPlist,
-  clearServiceLogs,
-  disableServiceIfInstalled,
-  getServiceStatus,
-  installService,
-  openGeneratedConfigDirectory,
-  openServiceLogs,
-  restartServiceIfInstalled,
-  stopServiceIfInstalled
-} from "./service.js";
 
 describe("service module", () => {
   beforeEach(async () => {
@@ -35,46 +25,27 @@ describe("service module", () => {
     await writeFile(configPath, '{"log":{"level":"error"}}\n', "utf8");
 
     const calls: Array<{ args: string[]; command: string }> = [];
-
-    const result = await installService(
-      async (command, args) => {
+    const context = createMacOSAppContext({
+      fileExistsChecker: async () => false,
+      isRoot: () => false,
+      pathResolver: async () => "/opt/homebrew/bin/sing-box",
+      streamingRunner: async (command, args) => {
         calls.push({ command, args });
-      },
-      async () => "/opt/homebrew/bin/sing-box",
-      () => false,
-      async () => false
-    );
+      }
+    });
+
+    const result = await context.service.install();
 
     expect(result.configPath).toBe(configPath);
+    expect(result.service.definitionPath).toBe("/Library/LaunchDaemons/io.shura.singboxctl.plist");
     expect(calls).toEqual([
-      {
-        command: "sudo",
-        args: ["-v"]
-      },
-      {
-        command: "sudo",
-        args: ["cp", expect.stringContaining("io.shura.singboxctl.plist"), "/Library/LaunchDaemons/io.shura.singboxctl.plist"]
-      },
-      {
-        command: "sudo",
-        args: ["chown", "root:wheel", "/Library/LaunchDaemons/io.shura.singboxctl.plist"]
-      },
-      {
-        command: "sudo",
-        args: ["chmod", "644", "/Library/LaunchDaemons/io.shura.singboxctl.plist"]
-      },
-      {
-        command: "sudo",
-        args: ["launchctl", "enable", "system/io.shura.singboxctl"]
-      },
-      {
-        command: "sudo",
-        args: ["rm", "-f", "/var/log/singboxctl.log"]
-      },
-      {
-        command: "sudo",
-        args: ["launchctl", "bootstrap", "system", "/Library/LaunchDaemons/io.shura.singboxctl.plist"]
-      }
+      { command: "sudo", args: ["-v"] },
+      { command: "sudo", args: ["cp", expect.stringContaining("io.shura.singboxctl.plist"), "/Library/LaunchDaemons/io.shura.singboxctl.plist"] },
+      { command: "sudo", args: ["chown", "root:wheel", "/Library/LaunchDaemons/io.shura.singboxctl.plist"] },
+      { command: "sudo", args: ["chmod", "644", "/Library/LaunchDaemons/io.shura.singboxctl.plist"] },
+      { command: "sudo", args: ["launchctl", "enable", "system/io.shura.singboxctl"] },
+      { command: "sudo", args: ["rm", "-f", "/var/log/singboxctl.log"] },
+      { command: "sudo", args: ["launchctl", "bootstrap", "system", "/Library/LaunchDaemons/io.shura.singboxctl.plist"] }
     ]);
   });
 
@@ -84,281 +55,232 @@ describe("service module", () => {
     await writeFile(configPath, '{"log":{"level":"error"}}\n', "utf8");
 
     const calls: Array<{ args: string[]; command: string }> = [];
+    const context = createMacOSAppContext({
+      fileExistsChecker: async () => false,
+      isRoot: () => false,
+      pathResolver: async () => "/opt/homebrew/bin/sing-box",
+      streamingRunner: async (command, args) => {
+        calls.push({ command, args });
 
-    await expect(
-      installService(
-        async (command, args) => {
-          calls.push({ command, args });
-
-          if (command === "sudo" && args[0] === "launchctl" && args[1] === "bootstrap") {
-            throw new Error("bootstrap failed");
-          }
-        },
-        async () => "/opt/homebrew/bin/sing-box",
-        () => false,
-        async () => false
-      )
-    ).rejects.toThrow("bootstrap failed");
-
-    expect(calls).toEqual([
-      {
-        command: "sudo",
-        args: ["-v"]
-      },
-      {
-        command: "sudo",
-        args: ["cp", expect.stringContaining("io.shura.singboxctl.plist"), "/Library/LaunchDaemons/io.shura.singboxctl.plist"]
-      },
-      {
-        command: "sudo",
-        args: ["chown", "root:wheel", "/Library/LaunchDaemons/io.shura.singboxctl.plist"]
-      },
-      {
-        command: "sudo",
-        args: ["chmod", "644", "/Library/LaunchDaemons/io.shura.singboxctl.plist"]
-      },
-      {
-        command: "sudo",
-        args: ["launchctl", "enable", "system/io.shura.singboxctl"]
-      },
-      {
-        command: "sudo",
-        args: ["rm", "-f", "/var/log/singboxctl.log"]
-      },
-      {
-        command: "sudo",
-        args: ["launchctl", "bootstrap", "system", "/Library/LaunchDaemons/io.shura.singboxctl.plist"]
-      },
-      {
-        command: "sudo",
-        args: ["rm", "-f", "/Library/LaunchDaemons/io.shura.singboxctl.plist"]
+        if (command === "sudo" && args[0] === "launchctl" && args[1] === "bootstrap") {
+          throw new Error("bootstrap failed");
+        }
       }
-    ]);
+    });
+
+    await expect(context.service.install()).rejects.toThrow("bootstrap failed");
+
+    expect(calls[calls.length - 1]).toEqual({
+      command: "sudo",
+      args: ["rm", "-f", "/Library/LaunchDaemons/io.shura.singboxctl.plist"]
+    });
   });
 
   it("reports a missing service as not installed", async () => {
-    const status = await getServiceStatus(
-      async () => {},
-      async () => ({ code: 1, stderr: "", stdout: "" }),
-      () => false,
-      async () => false
-    );
+    const context = createMacOSAppContext({
+      captureRunner: async () => ({ code: 1, stderr: "", stdout: "" }),
+      fileExistsChecker: async () => false,
+      isRoot: () => false,
+      streamingRunner: async () => {}
+    });
+
+    const status = await context.service.getStatus();
 
     expect(status).toMatchObject({
       installed: false,
       loaded: false,
-      label: "io.shura.singboxctl",
-      plistPath: "/Library/LaunchDaemons/io.shura.singboxctl.plist"
+      service: {
+        label: "io.shura.singboxctl",
+        definitionPath: "/Library/LaunchDaemons/io.shura.singboxctl.plist"
+      }
     });
+  });
+
+  it("uninstalls the service using the injected file existence checker", async () => {
+    const calls: Array<{ args: string[]; command: string }> = [];
+    const context = createMacOSAppContext({
+      captureRunner: async (command, args) => {
+        calls.push({ command, args });
+        return { code: 1, stderr: "", stdout: "" };
+      },
+      fileExistsChecker: async () => true,
+      isRoot: () => false,
+      streamingRunner: async (command, args) => {
+        calls.push({ command, args });
+      }
+    });
+
+    await expect(context.service.uninstall()).resolves.toBeUndefined();
+    expect(calls).toEqual([
+      { command: "sudo", args: ["-v"] },
+      { command: "sudo", args: ["launchctl", "bootout", "system/io.shura.singboxctl"] },
+      { command: "sudo", args: ["launchctl", "print", "system/io.shura.singboxctl"] },
+      { command: "sudo", args: ["rm", "-f", "/Library/LaunchDaemons/io.shura.singboxctl.plist"] }
+    ]);
   });
 
   it("opens the service log in Console when the log file exists", async () => {
     const calls: Array<{ args: string[]; command: string }> = [];
-
-    await openServiceLogs(
-      async (command, args) => {
+    const context = createMacOSAppContext({
+      fileExistsChecker: async () => true,
+      streamingRunner: async (command, args) => {
         calls.push({ command, args });
-      },
-      async () => true
-    );
-
-    expect(calls).toEqual([
-      {
-        command: "open",
-        args: ["-a", "Console", "/var/log/singboxctl.log"]
       }
-    ]);
+    });
+
+    await context.service.openLogs();
+
+    expect(calls).toEqual([{ command: "open", args: ["-a", "Console", "/var/log/singboxctl.log"] }]);
   });
 
   it("fails clearly when the service log file is missing", async () => {
-    await expect(openServiceLogs(async () => {}, async () => false)).rejects.toThrow(
-      "Service log not found at /var/log/singboxctl.log."
-    );
+    const context = createMacOSAppContext({
+      fileExistsChecker: async () => false,
+      streamingRunner: async () => {}
+    });
+
+    await expect(context.service.openLogs()).rejects.toThrow("Service log not found at /var/log/singboxctl.log.");
   });
 
   it("opens the generated config directory in Finder", async () => {
     const calls: Array<{ args: string[]; command: string }> = [];
-
-    await openGeneratedConfigDirectory(async (command, args) => {
-      calls.push({ command, args });
+    const context = createMacOSAppContext({
+      streamingRunner: async (command, args) => {
+        calls.push({ command, args });
+      }
     });
 
-    expect(calls).toEqual([
-      {
-        command: "open",
-        args: [join(process.env.HOME!, ".config", "singboxctl")]
-      }
-    ]);
+    await context.service.openConfigDirectory();
+
+    expect(calls).toEqual([{ command: "open", args: [join(process.env.HOME!, ".config", "singboxctl")] }]);
   });
 
   it("clears the service log using a privileged truncate command", async () => {
     const calls: Array<{ args: string[]; command: string }> = [];
-
-    await clearServiceLogs(
-      async (command, args) => {
+    const context = createMacOSAppContext({
+      fileExistsChecker: async () => true,
+      isRoot: () => false,
+      streamingRunner: async (command, args) => {
         calls.push({ command, args });
-      },
-      () => false,
-      async () => true
-    );
+      }
+    });
+
+    await context.service.clearLogs();
 
     expect(calls).toEqual([
-      {
-        command: "sudo",
-        args: ["-v"]
-      },
-      {
-        command: "sudo",
-        args: ["truncate", "-s", "0", "/var/log/singboxctl.log"]
-      }
+      { command: "sudo", args: ["-v"] },
+      { command: "sudo", args: ["truncate", "-s", "0", "/var/log/singboxctl.log"] }
     ]);
   });
 
   it("does nothing when clearing service logs and the log file is missing", async () => {
     const calls: Array<{ args: string[]; command: string }> = [];
-
-    await clearServiceLogs(
-      async (command, args) => {
+    const context = createMacOSAppContext({
+      fileExistsChecker: async () => false,
+      isRoot: () => false,
+      streamingRunner: async (command, args) => {
         calls.push({ command, args });
-      },
-      () => false,
-      async () => false
-    );
+      }
+    });
 
+    await context.service.clearLogs();
     expect(calls).toEqual([]);
   });
 
   it("does not restart a missing service", async () => {
-    await expect(
-      restartServiceIfInstalled(
-        async () => {},
-        async () => ({ code: 1, stderr: "", stdout: "" }),
-        () => false,
-        async () => false
-      )
-    ).resolves.toBe(false);
+    const context = createMacOSAppContext({
+      captureRunner: async () => ({ code: 1, stderr: "", stdout: "" }),
+      fileExistsChecker: async () => false,
+      isRoot: () => false,
+      streamingRunner: async () => {}
+    });
+
+    await expect(context.service.restartIfInstalled()).resolves.toBe(false);
   });
 
   it("kickstarts a loaded installed service", async () => {
     const calls: Array<{ args: string[]; command: string }> = [];
-
-    const restarted = await restartServiceIfInstalled(
-      async (command, args) => {
-        calls.push({ command, args });
-      },
-      async (command, args) => {
+    const context = createMacOSAppContext({
+      captureRunner: async (command, args) => {
         calls.push({ command, args });
         return { code: 0, stderr: "", stdout: "" };
       },
-      () => false,
-      async () => true
-    );
-
-    expect(restarted).toBe(true);
-    expect(calls).toEqual([
-      {
-        command: "sudo",
-        args: ["-v"]
-      },
-      {
-        command: "sudo",
-        args: ["launchctl", "enable", "system/io.shura.singboxctl"]
-      },
-      {
-        command: "sudo",
-        args: ["launchctl", "print", "system/io.shura.singboxctl"]
-      },
-      {
-        command: "sudo",
-        args: ["rm", "-f", "/var/log/singboxctl.log"]
-      },
-      {
-        command: "sudo",
-        args: ["launchctl", "kickstart", "-k", "system/io.shura.singboxctl"]
+      fileExistsChecker: async () => true,
+      isRoot: () => false,
+      streamingRunner: async (command, args) => {
+        calls.push({ command, args });
       }
+    });
+
+    await expect(context.service.restartIfInstalled()).resolves.toBe(true);
+    expect(calls).toEqual([
+      { command: "sudo", args: ["-v"] },
+      { command: "sudo", args: ["launchctl", "enable", "system/io.shura.singboxctl"] },
+      { command: "sudo", args: ["launchctl", "print", "system/io.shura.singboxctl"] },
+      { command: "sudo", args: ["rm", "-f", "/var/log/singboxctl.log"] },
+      { command: "sudo", args: ["launchctl", "kickstart", "-k", "system/io.shura.singboxctl"] }
     ]);
   });
 
   it("bootstraps an installed but unloaded service", async () => {
     const calls: Array<{ args: string[]; command: string }> = [];
-
-    const restarted = await restartServiceIfInstalled(
-      async (command, args) => {
-        calls.push({ command, args });
-      },
-      async (command, args) => {
+    const context = createMacOSAppContext({
+      captureRunner: async (command, args) => {
         calls.push({ command, args });
         return { code: 1, stderr: "", stdout: "" };
       },
-      () => false,
-      async () => true
-    );
-
-    expect(restarted).toBe(true);
-    expect(calls).toEqual([
-      {
-        command: "sudo",
-        args: ["-v"]
-      },
-      {
-        command: "sudo",
-        args: ["launchctl", "enable", "system/io.shura.singboxctl"]
-      },
-      {
-        command: "sudo",
-        args: ["launchctl", "print", "system/io.shura.singboxctl"]
-      },
-      {
-        command: "sudo",
-        args: ["rm", "-f", "/var/log/singboxctl.log"]
-      },
-      {
-        command: "sudo",
-        args: ["launchctl", "bootstrap", "system", "/Library/LaunchDaemons/io.shura.singboxctl.plist"]
+      fileExistsChecker: async () => true,
+      isRoot: () => false,
+      streamingRunner: async (command, args) => {
+        calls.push({ command, args });
       }
+    });
+
+    await expect(context.service.restartIfInstalled()).resolves.toBe(true);
+    expect(calls).toEqual([
+      { command: "sudo", args: ["-v"] },
+      { command: "sudo", args: ["launchctl", "enable", "system/io.shura.singboxctl"] },
+      { command: "sudo", args: ["launchctl", "print", "system/io.shura.singboxctl"] },
+      { command: "sudo", args: ["rm", "-f", "/var/log/singboxctl.log"] },
+      { command: "sudo", args: ["launchctl", "bootstrap", "system", "/Library/LaunchDaemons/io.shura.singboxctl.plist"] }
     ]);
   });
 
-  it("does not stop a missing service", async () => {
+  it("returns false when stopping an installed but unloaded service", async () => {
     const calls: Array<{ args: string[]; command: string }> = [];
-
-    const stopped = await stopServiceIfInstalled(
-      async (command, args) => {
+    const context = createMacOSAppContext({
+      captureRunner: async (command, args) => {
         calls.push({ command, args });
+        return { code: 1, stderr: "", stdout: "" };
       },
-      async (command, args) => {
+      fileExistsChecker: async () => true,
+      isRoot: () => false,
+      streamingRunner: async (command, args) => {
         calls.push({ command, args });
-        return { code: 0, stderr: "", stdout: "" };
-      },
-      () => false,
-      async () => false
-    );
+      }
+    });
 
-    expect(stopped).toBe(false);
-    expect(calls).toEqual([]);
+    await expect(context.service.stopIfInstalled()).resolves.toBe(false);
+    expect(calls).toEqual([
+      { command: "sudo", args: ["-v"] },
+      { command: "sudo", args: ["launchctl", "print", "system/io.shura.singboxctl"] }
+    ]);
   });
 
-  it("disables an installed service without removing its plist", async () => {
+  it("disables an installed service", async () => {
     const calls: Array<{ args: string[]; command: string }> = [];
-
-    const disabled = await disableServiceIfInstalled(
-      async (command, args) => {
+    const context = createMacOSAppContext({
+      fileExistsChecker: async () => true,
+      isRoot: () => false,
+      streamingRunner: async (command, args) => {
         calls.push({ command, args });
-      },
-      () => false,
-      async () => true
-    );
-
-    expect(disabled).toBe(true);
-    expect(calls).toEqual([
-      {
-        command: "sudo",
-        args: ["-v"]
-      },
-      {
-        command: "sudo",
-        args: ["launchctl", "disable", "system/io.shura.singboxctl"]
       }
+    });
+
+    await expect(context.service.disableIfInstalled()).resolves.toBe(true);
+    expect(calls).toEqual([
+      { command: "sudo", args: ["-v"] },
+      { command: "sudo", args: ["launchctl", "disable", "system/io.shura.singboxctl"] }
     ]);
   });
 });

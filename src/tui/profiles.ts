@@ -1,3 +1,4 @@
+import type { AppContext } from "../app-context.js";
 import { log } from "@clack/prompts";
 import { FriendlyMessageError, promptMultiSelect, promptSelect, promptText } from "../cli.js";
 import { addProfile, listProfiles, listRuleSets, removeProfile, setProfileRuleSets } from "../store.js";
@@ -5,7 +6,7 @@ import { runChildMenuLoop } from "./menu-loop.js";
 
 type ProfilesAction = "add" | "back" | "remove" | "set-rule-sets";
 
-export async function runProfilesMenu(): Promise<void> {
+export async function runProfilesMenu(context: AppContext): Promise<void> {
   await runChildMenuLoop<ProfilesAction>({
     select: () =>
       promptSelect<ProfilesAction>(
@@ -38,10 +39,10 @@ export async function runProfilesMenu(): Promise<void> {
           await runProfilesAdd();
           return "continue";
         case "remove":
-          await runProfilesRemove();
+          await runProfilesRemove(context);
           return "continue";
         case "set-rule-sets":
-          await runProfilesSetRuleSets();
+          await runProfilesSetRuleSets(context);
           return "continue";
         case "back":
           return "back";
@@ -60,7 +61,7 @@ async function runProfilesAdd(): Promise<void> {
   log.success(`Created profile "${profile.name}".`);
 }
 
-async function runProfilesRemove(): Promise<void> {
+async function runProfilesRemove(context: AppContext): Promise<void> {
   const profiles = (await listProfiles()).filter((profile) => !profile.builtIn);
 
   if (profiles.length === 0) {
@@ -76,19 +77,19 @@ async function runProfilesRemove(): Promise<void> {
     "Choose a profile to remove"
   );
 
-  const result = await removeProfile(name);
+  const result = await removeProfile(name, context.service);
   log.success(`Removed profile "${name}".`);
 
   if (result.clearedActiveProfile) {
     log.warn('Removed the active profile from the current selection and deleted config.json.');
 
     if (result.stoppedService) {
-      log.warn("Stopped the launchd service because it was using the deleted active selection.");
+      log.warn(`Stopped the ${context.service.getInfo().displayName} because it was using the deleted active selection.`);
     }
   }
 }
 
-async function runProfilesSetRuleSets(): Promise<void> {
+async function runProfilesSetRuleSets(context: AppContext): Promise<void> {
   const profiles = (await listProfiles()).filter((profile) => !profile.builtIn);
 
   if (profiles.length === 0) {
@@ -126,7 +127,7 @@ async function runProfilesSetRuleSets(): Promise<void> {
     profile.ruleSetNames
   );
 
-  await setProfileRuleSets(profileName, selectedRuleSets);
+  await setProfileRuleSets(profileName, selectedRuleSets, context.service);
   log.success(
     `Profile "${profileName}" now uses ${selectedRuleSets.length} rule set${selectedRuleSets.length === 1 ? "" : "s"}.`
   );

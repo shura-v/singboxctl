@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { buildAndWriteGeneratedConfig } from "./sing-box-config.js";
+import { mockRuntimeDependencies } from "./test-helpers.js";
 import {
   FULL_TUNNEL_PROFILE_NAME,
   addConnection,
@@ -42,6 +43,8 @@ const VALID_VLESS_URI =
 
 const UPDATED_VLESS_URI =
   "vless://2eaab0cc-7cef-4864-9bfe-c7c2374c5c1f@updated.example.com:8443?encryption=none&flow=xtls-rprx-vision&fp=ios&pbk=updated-public-key&security=reality&sid=48b32b4141bb&sni=cdn.jsdelivr.net&type=tcp#work";
+
+const runtime = mockRuntimeDependencies();
 
 describe("store", () => {
   beforeEach(async () => {
@@ -108,7 +111,7 @@ describe("store", () => {
     expect(await getActiveConnectionName()).toBe("Work");
     expect(await getActiveProfileName()).toBe("Office");
 
-    await clearActiveSelection();
+    await clearActiveSelection(runtime);
 
     expect(await getActiveConnectionName()).toBeUndefined();
     expect(await getActiveProfileName()).toBeUndefined();
@@ -118,7 +121,7 @@ describe("store", () => {
   it("stores the IPv6 enabled flag in state", async () => {
     expect(await getIpv6Enabled()).toBe(false);
 
-    await expect(setIpv6Enabled(true)).resolves.toEqual({
+    await expect(setIpv6Enabled(true, runtime)).resolves.toEqual({
       activeSelectionComplete: false,
       disabledService: false,
       removedGeneratedConfig: false,
@@ -127,7 +130,7 @@ describe("store", () => {
     });
     expect(await getIpv6Enabled()).toBe(true);
 
-    await expect(setIpv6Enabled(false)).resolves.toEqual({
+    await expect(setIpv6Enabled(false, runtime)).resolves.toEqual({
       activeSelectionComplete: false,
       disabledService: false,
       removedGeneratedConfig: false,
@@ -140,15 +143,15 @@ describe("store", () => {
   it("stores the selected log level in state", async () => {
     expect(await getLogLevel()).toBe("error");
 
-    await setLogLevel("debug");
+    await setLogLevel("debug", runtime);
     expect(await getLogLevel()).toBe("debug");
 
-    await setLogLevel("warn");
+    await setLogLevel("warn", runtime);
     expect(await getLogLevel()).toBe("warn");
   });
 
   it("does not touch runtime when rebuilding without an active selection", async () => {
-    await expect(rebuildGeneratedConfigForActiveSelection()).resolves.toEqual({
+    await expect(rebuildGeneratedConfigForActiveSelection(runtime)).resolves.toEqual({
       activeSelectionComplete: false,
       disabledService: false,
       removedGeneratedConfig: false,
@@ -174,7 +177,7 @@ describe("store", () => {
     await addProfile("Office");
     await setActiveSelection("Work", "Office");
 
-    const connection = await updateConnection("Work", "Work V2", UPDATED_VLESS_URI);
+    const connection = await updateConnection("Work", "Work V2", UPDATED_VLESS_URI, runtime);
 
     expect(connection).toEqual({
       name: "Work V2",
@@ -192,7 +195,7 @@ describe("store", () => {
   it("allows case-only connection renames and renames the file on disk", async () => {
     await addConnection("Work", VALID_VLESS_URI);
 
-    const connection = await updateConnection("Work", "work", UPDATED_VLESS_URI);
+    const connection = await updateConnection("Work", "work", UPDATED_VLESS_URI, runtime);
     const files = await readdir(join(getDataDirectoryPath(), "connections"));
 
     expect(connection).toEqual({
@@ -214,7 +217,7 @@ describe("store", () => {
     await setActiveSelection("Work", "Office");
     await buildAndWriteGeneratedConfig("Work", "Office");
 
-    await updateConnection("Work", "Work", UPDATED_VLESS_URI);
+    await updateConnection("Work", "Work", UPDATED_VLESS_URI, runtime);
 
     const config = JSON.parse(await readFile(getGeneratedConfigPath(), "utf8")) as {
       outbounds: Array<{ server: string; server_port: number; tls: { reality: { public_key: string } } }>;
@@ -237,7 +240,7 @@ describe("store", () => {
     await setActiveSelection("Work", "Office");
     await buildAndWriteGeneratedConfig("Work", "Office");
 
-    const result = await removeConnection("Work");
+    const result = await removeConnection("Work", runtime);
 
     await expect(readFile(getGeneratedConfigPath(), "utf8")).rejects.toThrow();
     expect(result).toEqual({
@@ -256,7 +259,7 @@ describe("store", () => {
     await addConnection("Work", VALID_VLESS_URI);
     await writeFile(join(getDataDirectoryPath(), "connections", "Work.json"), "{", "utf8");
 
-    const result = await removeConnection("Work");
+    const result = await removeConnection("Work", runtime);
 
     expect(result).toEqual({
       clearedActiveConnection: false,
@@ -275,7 +278,7 @@ describe("store", () => {
     await setActiveSelection("Work", "Office");
     await buildAndWriteGeneratedConfig("Work", "Office");
 
-    const result = await removeProfile("Office");
+    const result = await removeProfile("Office", runtime);
 
     await expect(readFile(getGeneratedConfigPath(), "utf8")).rejects.toThrow();
     expect(result).toEqual({
@@ -295,7 +298,8 @@ describe("store", () => {
 
     const addedRules = await addRulesToRuleSet(
       "Work",
-      "domain:chatgpt.com\ndomain:raw.githubusercontent.com\ndomain:ios.chat.openai.com\ndomain:ab.chatgpt.com"
+      "domain:chatgpt.com\ndomain:raw.githubusercontent.com\ndomain:ios.chat.openai.com\ndomain:ab.chatgpt.com",
+      runtime
     );
 
     expect(addedRules).toEqual([
@@ -323,13 +327,14 @@ describe("store", () => {
     await addRuleSet("Work");
     await addRulesToRuleSet(
       "Work",
-      "domain:google.com\ndomain_suffix:google.com\nip_cidr:1.2.3.0/24"
+      "domain:google.com\ndomain_suffix:google.com\nip_cidr:1.2.3.0/24",
+      runtime
     );
 
     const removedRules = await removeRulesFromRuleSet("Work", [
       "domain_suffix:google.com",
       "ip_cidr:1.2.3.0/24"
-    ]);
+    ], runtime);
 
     expect(removedRules).toEqual([
       "domain_suffix:google.com",
@@ -350,7 +355,7 @@ describe("store", () => {
     await addRuleSet("Google");
     await addRuleSet("Microsoft");
 
-    await setProfileRuleSets("Work", ["Google", "Microsoft"]);
+    await setProfileRuleSets("Work", ["Google", "Microsoft"], runtime);
 
     const profiles = await listProfiles();
     expect(profiles).toEqual([
@@ -384,7 +389,7 @@ describe("store", () => {
     await buildAndWriteGeneratedConfig("Work", "Office");
     const previousConfigJson = await readFile(getGeneratedConfigPath(), "utf8");
 
-    await setProfileRuleSets("Home", ["Services"]);
+    await setProfileRuleSets("Home", ["Services"], runtime);
 
     expect(await readFile(getGeneratedConfigPath(), "utf8")).toBe(previousConfigJson);
   });
@@ -428,7 +433,7 @@ describe("store", () => {
     await addProfile("Work");
     await writeFile(join(getDataDirectoryPath(), "profiles", "Work.json"), JSON.stringify({}), "utf8");
 
-    const result = await removeProfile("Work");
+    const result = await removeProfile("Work", runtime);
 
     expect(result).toEqual({
       clearedActiveConnection: false,
@@ -451,7 +456,7 @@ describe("store", () => {
     await addRuleSet("Work");
     await writeFile(join(getDataDirectoryPath(), "rule-sets", "Work.json"), JSON.stringify({}), "utf8");
 
-    await removeRuleSet("Work");
+    await removeRuleSet("Work", runtime);
 
     await expect(listRuleSets()).resolves.toEqual([]);
   });
@@ -459,9 +464,9 @@ describe("store", () => {
   it("rejects removing a rule set with the wrong case", async () => {
     await addProfile("Office");
     await addRuleSet("Services");
-    await setProfileRuleSets("Office", ["Services"]);
+    await setProfileRuleSets("Office", ["Services"], runtime);
 
-    await expect(removeRuleSet("services")).rejects.toThrow('Rule set "services" does not exist.');
+    await expect(removeRuleSet("services", runtime)).rejects.toThrow('Rule set "services" does not exist.');
 
     await expect(listRuleSets()).resolves.toEqual([
       {
@@ -514,7 +519,7 @@ describe("store", () => {
   it("rejects unsupported rule syntax before saving a rule set", async () => {
     await addRuleSet("Work");
 
-    await expect(setRulesForRuleSet("Work", "geosite:openai")).rejects.toThrow(
+    await expect(setRulesForRuleSet("Work", "geosite:openai", runtime)).rejects.toThrow(
       'Unsupported rule type "geosite". Use domain, domain_suffix, or ip_cidr.'
     );
   });
@@ -522,7 +527,7 @@ describe("store", () => {
   it("rejects malformed rule lines before saving a rule set", async () => {
     await addRuleSet("Work");
 
-    await expect(setRulesForRuleSet("Work", "google.com")).rejects.toThrow(
+    await expect(setRulesForRuleSet("Work", "google.com", runtime)).rejects.toThrow(
       'Unsupported rule "google.com". Use domain:, domain_suffix:, or ip_cidr:.'
     );
   });
@@ -559,9 +564,9 @@ describe("store", () => {
     await addConnection("Work", VALID_VLESS_URI);
     await addProfile("Office");
     await addRuleSet("Services");
-    await setProfileRuleSets("Office", ["Services"]);
+    await setProfileRuleSets("Office", ["Services"], runtime);
     await setActiveSelection("Work", "Office");
-    await setRulesForRuleSet("Services", "domain:openai.com");
+    await setRulesForRuleSet("Services", "domain:openai.com", runtime);
 
     const initialConfig = JSON.parse(await readFile(getGeneratedConfigPath(), "utf8")) as {
       route: { rules: Array<{ domain?: string[]; domain_suffix?: string[] }> };
@@ -575,7 +580,7 @@ describe("store", () => {
       ])
     );
 
-    await setRulesForRuleSet("Services", "domain_suffix:chatgpt.com");
+    await setRulesForRuleSet("Services", "domain_suffix:chatgpt.com", runtime);
 
     const updatedConfig = JSON.parse(await readFile(getGeneratedConfigPath(), "utf8")) as {
       route: { rules: Array<{ domain?: string[]; domain_suffix?: string[] }> };
@@ -602,12 +607,12 @@ describe("store", () => {
     await addProfile("Office");
     await addRuleSet("Services");
     await addRuleSet("Other");
-    await setProfileRuleSets("Office", ["Services"]);
+    await setProfileRuleSets("Office", ["Services"], runtime);
     await setActiveSelection("Work", "Office");
-    await setRulesForRuleSet("Services", "domain:openai.com");
+    await setRulesForRuleSet("Services", "domain:openai.com", runtime);
     const previousConfigJson = await readFile(getGeneratedConfigPath(), "utf8");
 
-    await setRulesForRuleSet("Other", "domain:example.com");
+    await setRulesForRuleSet("Other", "domain:example.com", runtime);
 
     expect(await readFile(getGeneratedConfigPath(), "utf8")).toBe(previousConfigJson);
   });

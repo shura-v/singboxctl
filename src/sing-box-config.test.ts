@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { buildAndWriteGeneratedConfig, parseRuleEntry } from "./sing-box-config.js";
+import { mockRuntimeDependencies } from "./test-helpers.js";
 import {
   FULL_TUNNEL_PROFILE_NAME,
   addConnection,
@@ -18,6 +19,8 @@ import {
 const VALID_VLESS_URI =
   "vless://2eaab0cc-7cef-4864-9bfe-c7c2374c5c1f@example.com:443?encryption=none&flow=xtls-rprx-vision&fp=ios&pbk=test-public-key&security=reality&sid=48b32b4141bb&sni=cdn.jsdelivr.net&type=tcp#work";
 
+const runtime = mockRuntimeDependencies();
+
 describe("sing-box config builder", () => {
   beforeEach(async () => {
     process.env.HOME = await mkdtemp(join(tmpdir(), "singboxctl-config-test-"));
@@ -29,9 +32,10 @@ describe("sing-box config builder", () => {
     await addRuleSet("Services");
     await addRulesToRuleSet(
       "Services",
-      "domain:openai.com\ndomain_suffix:chatgpt.com\ndomain_suffix:openai.com\nip_cidr:1.2.3.0/24"
+      "domain:openai.com\ndomain_suffix:chatgpt.com\ndomain_suffix:openai.com\nip_cidr:1.2.3.0/24",
+      runtime
     );
-    await setProfileRuleSets("Office", ["Services"]);
+    await setProfileRuleSets("Office", ["Services"], runtime);
 
     const result = await buildAndWriteGeneratedConfig("Work", "Office");
 
@@ -165,7 +169,7 @@ describe("sing-box config builder", () => {
   it("adds an IPv6 TUN address when IPv6 is enabled", async () => {
     await addConnection("Work", VALID_VLESS_URI);
     await addProfile("Office");
-    await setIpv6Enabled(true);
+    await setIpv6Enabled(true, runtime);
 
     const result = await buildAndWriteGeneratedConfig("Work", "Office");
     const writtenConfig = JSON.parse(await readFile(result.configPath, "utf8")) as {
@@ -187,7 +191,7 @@ describe("sing-box config builder", () => {
   it("uses the selected log level in the generated config", async () => {
     await addConnection("Work", VALID_VLESS_URI);
     await addProfile("Office");
-    await setLogLevel("debug");
+    await setLogLevel("debug", runtime);
 
     const result = await buildAndWriteGeneratedConfig("Work", "Office");
     const writtenConfig = JSON.parse(await readFile(result.configPath, "utf8")) as {

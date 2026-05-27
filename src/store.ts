@@ -1,6 +1,7 @@
 import { access, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { RuntimeDependencies } from "./app-context.js";
 import { FriendlyMessageError } from "./cli.js";
 
 export type ConnectionRecord = {
@@ -142,7 +143,8 @@ export async function addConnection(name: string, rawUri: string): Promise<Conne
 export async function updateConnection(
   currentName: string,
   nextName: string,
-  rawUri: string
+  rawUri: string,
+  runtimeDependencies: RuntimeDependencies
 ): Promise<ConnectionRecord> {
   const connection = await getConnection(currentName);
   const normalizedNextName = normalizeConnectionName(nextName);
@@ -184,13 +186,16 @@ export async function updateConnection(
   if (state.activeConnectionName === connection.name) {
     state.activeConnectionName = normalizedNextName;
     await writeState(state);
-    await rebuildGeneratedConfigForActiveSelection();
+    await rebuildGeneratedConfigForActiveSelection(runtimeDependencies);
   }
 
   return nextConnection;
 }
 
-export async function removeConnection(name: string): Promise<RemovalResult> {
+export async function removeConnection(
+  name: string,
+  runtimeDependencies: RuntimeDependencies
+): Promise<RemovalResult> {
   if (!(await hasStoredJsonExact(getConnectionsDirectoryPath(), name))) {
     throw new FriendlyMessageError(`Connection "${name}" does not exist.`);
   }
@@ -202,7 +207,7 @@ export async function removeConnection(name: string): Promise<RemovalResult> {
   if (state.activeConnectionName === name) {
     delete state.activeConnectionName;
     await writeState(state);
-    const invalidation = await invalidateGeneratedConfigAndStopServiceIfNeeded();
+    const invalidation = await invalidateGeneratedConfigAndStopServiceIfNeeded(runtimeDependencies);
     return {
       clearedActiveConnection: true,
       clearedActiveProfile: false,
@@ -297,7 +302,10 @@ export async function createRuleSet(name: string, rawInput: string): Promise<Rul
   return ruleSet;
 }
 
-export async function removeProfile(name: string): Promise<RemovalResult> {
+export async function removeProfile(
+  name: string,
+  runtimeDependencies: RuntimeDependencies
+): Promise<RemovalResult> {
   if (isBuiltInProfileName(name)) {
     throw new FriendlyMessageError(`Profile "${name}" is built in and cannot be removed.`);
   }
@@ -313,7 +321,7 @@ export async function removeProfile(name: string): Promise<RemovalResult> {
   if (state.activeProfileName === name) {
     delete state.activeProfileName;
     await writeState(state);
-    const invalidation = await invalidateGeneratedConfigAndStopServiceIfNeeded();
+    const invalidation = await invalidateGeneratedConfigAndStopServiceIfNeeded(runtimeDependencies);
     return {
       clearedActiveConnection: false,
       clearedActiveProfile: true,
@@ -331,7 +339,10 @@ export async function removeProfile(name: string): Promise<RemovalResult> {
   };
 }
 
-export async function removeRuleSet(name: string): Promise<void> {
+export async function removeRuleSet(
+  name: string,
+  runtimeDependencies: RuntimeDependencies
+): Promise<void> {
   if (!(await hasStoredJsonExact(getRuleSetsDirectoryPath(), name))) {
     throw new FriendlyMessageError(`Rule set "${name}" does not exist.`);
   }
@@ -351,7 +362,7 @@ export async function removeRuleSet(name: string): Promise<void> {
   }
 
   if (affectsActiveSelection) {
-    await rebuildGeneratedConfigForActiveSelection();
+    await rebuildGeneratedConfigForActiveSelection(runtimeDependencies);
   }
 }
 
@@ -415,12 +426,14 @@ export async function setActiveSelection(connectionName: string, profileName: st
   await writeState(state);
 }
 
-export async function clearActiveSelection(): Promise<void> {
+export async function clearActiveSelection(
+  runtimeDependencies: RuntimeDependencies
+): Promise<void> {
   const state = await readState();
   delete state.activeConnectionName;
   delete state.activeProfileName;
   await writeState(state);
-  await finalizeActiveSelectionRuntime();
+  await finalizeActiveSelectionRuntime(runtimeDependencies);
 }
 
 export async function setServiceIntent(enabled: boolean): Promise<void> {
@@ -433,7 +446,10 @@ export async function getServiceIntent(): Promise<boolean> {
   return (await readState()).serviceIntent === true;
 }
 
-export async function setIpv6Enabled(enabled: boolean): Promise<ActiveSelectionRuntimeResult> {
+export async function setIpv6Enabled(
+  enabled: boolean,
+  runtimeDependencies: RuntimeDependencies
+): Promise<ActiveSelectionRuntimeResult> {
   const state = await readState();
   state.ipv6Enabled = enabled;
   await writeState(state);
@@ -448,14 +464,17 @@ export async function setIpv6Enabled(enabled: boolean): Promise<ActiveSelectionR
     };
   }
 
-  return rebuildGeneratedConfigForActiveSelection();
+  return rebuildGeneratedConfigForActiveSelection(runtimeDependencies);
 }
 
 export async function getIpv6Enabled(): Promise<boolean> {
   return (await readState()).ipv6Enabled === true;
 }
 
-export async function setLogLevel(level: LogLevel): Promise<ActiveSelectionRuntimeResult> {
+export async function setLogLevel(
+  level: LogLevel,
+  runtimeDependencies: RuntimeDependencies
+): Promise<ActiveSelectionRuntimeResult> {
   const state = await readState();
   state.logLevel = level;
   await writeState(state);
@@ -470,14 +489,16 @@ export async function setLogLevel(level: LogLevel): Promise<ActiveSelectionRunti
     };
   }
 
-  return rebuildGeneratedConfigForActiveSelection();
+  return rebuildGeneratedConfigForActiveSelection(runtimeDependencies);
 }
 
 export async function getLogLevel(): Promise<LogLevel> {
   return (await readState()).logLevel ?? "error";
 }
 
-export async function rebuildGeneratedConfigForActiveSelection(): Promise<ActiveSelectionRuntimeResult> {
+export async function rebuildGeneratedConfigForActiveSelection(
+  runtimeDependencies: RuntimeDependencies
+): Promise<ActiveSelectionRuntimeResult> {
   const state = await readState();
 
   if (!state.activeConnectionName || !state.activeProfileName) {
@@ -490,15 +511,17 @@ export async function rebuildGeneratedConfigForActiveSelection(): Promise<Active
     };
   }
 
-  return finalizeActiveSelectionRuntime();
+  return finalizeActiveSelectionRuntime(runtimeDependencies);
 }
 
-export async function finalizeActiveSelectionRuntime(): Promise<ActiveSelectionRuntimeResult> {
+export async function finalizeActiveSelectionRuntime(
+  runtimeDependencies: RuntimeDependencies
+): Promise<ActiveSelectionRuntimeResult> {
   const state = await readState();
 
   if (!state.activeConnectionName || !state.activeProfileName) {
-    const disabledService = await disableInstalledServiceIfNeeded();
-    const stoppedService = await stopInstalledServiceIfNeeded();
+    const disabledService = await disableInstalledServiceIfNeeded(runtimeDependencies);
+    const stoppedService = await stopInstalledServiceIfNeeded(runtimeDependencies);
     const removedGeneratedConfig = await removeGeneratedConfigIfExists();
 
     return {
@@ -510,19 +533,20 @@ export async function finalizeActiveSelectionRuntime(): Promise<ActiveSelectionR
     };
   }
 
-  return synchronizeRuntimeForSelection(state.activeConnectionName, state.activeProfileName);
+  return synchronizeRuntimeForSelection(state.activeConnectionName, state.activeProfileName, runtimeDependencies);
 }
 
 export async function applyActiveSelection(
   connectionName: string,
-  profileName: string
+  profileName: string,
+  runtimeDependencies: RuntimeDependencies
 ): Promise<ActiveSelectionRuntimeResult> {
   const configPath = await buildGeneratedConfigForSelection(connectionName, profileName);
   const state = await readState();
   state.activeConnectionName = connectionName;
   state.activeProfileName = profileName;
   await writeState(state);
-  const restartedService = await restartInstalledServiceIfNeeded();
+  const restartedService = await restartInstalledServiceIfNeeded(runtimeDependencies);
 
   return {
     activeSelectionComplete: true,
@@ -536,10 +560,11 @@ export async function applyActiveSelection(
 
 async function synchronizeRuntimeForSelection(
   connectionName: string,
-  profileName: string
+  profileName: string,
+  runtimeDependencies: RuntimeDependencies
 ): Promise<ActiveSelectionRuntimeResult> {
   const configPath = await buildGeneratedConfigForSelection(connectionName, profileName);
-  const restartedService = await restartInstalledServiceIfNeeded();
+  const restartedService = await restartInstalledServiceIfNeeded(runtimeDependencies);
 
   return {
     activeSelectionComplete: true,
@@ -560,9 +585,8 @@ async function buildGeneratedConfigForSelection(
   return configPath;
 }
 
-async function restartInstalledServiceIfNeeded(): Promise<boolean> {
-  const { restartServiceIfInstalled } = await import("./service.js");
-  return restartServiceIfInstalled();
+async function restartInstalledServiceIfNeeded(runtimeDependencies: RuntimeDependencies): Promise<boolean> {
+  return runtimeDependencies.restartIfInstalled();
 }
 
 async function isActiveProfile(profileName: string): Promise<boolean> {
@@ -580,7 +604,11 @@ async function isRuleSetReferencedByActiveProfile(ruleSetName: string): Promise<
   return activeProfile?.ruleSetNames.includes(ruleSetName) === true;
 }
 
-export async function setProfileRuleSets(profileName: string, ruleSetNames: string[]): Promise<string[]> {
+export async function setProfileRuleSets(
+  profileName: string,
+  ruleSetNames: string[],
+  runtimeDependencies: RuntimeDependencies
+): Promise<string[]> {
   const profile = await readProfile(profileName);
 
   if (profile.builtIn) {
@@ -601,13 +629,17 @@ export async function setProfileRuleSets(profileName: string, ruleSetNames: stri
   await writeProfile(profileName, profile.ruleSetNames);
 
   if (await isActiveProfile(profileName)) {
-    await rebuildGeneratedConfigForActiveSelection();
+    await rebuildGeneratedConfigForActiveSelection(runtimeDependencies);
   }
 
   return uniqueNames;
 }
 
-export async function addRulesToRuleSet(ruleSetName: string, rawInput: string): Promise<string[]> {
+export async function addRulesToRuleSet(
+  ruleSetName: string,
+  rawInput: string,
+  runtimeDependencies: RuntimeDependencies
+): Promise<string[]> {
   const ruleSet = await readRuleSet(ruleSetName);
   const rules = parseRuleEntries(rawInput);
   const affectsActiveSelection = await isRuleSetReferencedByActiveProfile(ruleSet.name);
@@ -623,13 +655,17 @@ export async function addRulesToRuleSet(ruleSetName: string, rawInput: string): 
   await writeRuleSet(ruleSet.name, ruleSet.rules);
 
   if (affectsActiveSelection) {
-    await rebuildGeneratedConfigForActiveSelection();
+    await rebuildGeneratedConfigForActiveSelection(runtimeDependencies);
   }
 
   return addedRules;
 }
 
-export async function setRulesForRuleSet(ruleSetName: string, rawInput: string): Promise<string[]> {
+export async function setRulesForRuleSet(
+  ruleSetName: string,
+  rawInput: string,
+  runtimeDependencies: RuntimeDependencies
+): Promise<string[]> {
   const ruleSet = await readRuleSet(ruleSetName);
   const rules = parseRuleEntries(rawInput);
   const affectsActiveSelection = await isRuleSetReferencedByActiveProfile(ruleSet.name);
@@ -637,13 +673,17 @@ export async function setRulesForRuleSet(ruleSetName: string, rawInput: string):
   await writeRuleSet(ruleSet.name, ruleSet.rules);
 
   if (affectsActiveSelection) {
-    await rebuildGeneratedConfigForActiveSelection();
+    await rebuildGeneratedConfigForActiveSelection(runtimeDependencies);
   }
 
   return rules;
 }
 
-export async function removeRulesFromRuleSet(ruleSetName: string, rules: string[]): Promise<string[]> {
+export async function removeRulesFromRuleSet(
+  ruleSetName: string,
+  rules: string[],
+  runtimeDependencies: RuntimeDependencies
+): Promise<string[]> {
   const ruleSet = await readRuleSet(ruleSetName);
   const affectsActiveSelection = await isRuleSetReferencedByActiveProfile(ruleSet.name);
 
@@ -662,7 +702,7 @@ export async function removeRulesFromRuleSet(ruleSetName: string, rules: string[
   await writeRuleSet(ruleSet.name, ruleSet.rules);
 
   if (affectsActiveSelection) {
-    await rebuildGeneratedConfigForActiveSelection();
+    await rebuildGeneratedConfigForActiveSelection(runtimeDependencies);
   }
 
   return removedRules;
@@ -908,14 +948,14 @@ async function writeState(state: AppState): Promise<void> {
   await writeJson(getStatePath(), state);
 }
 
-async function invalidateGeneratedConfigAndStopServiceIfNeeded(): Promise<{
+async function invalidateGeneratedConfigAndStopServiceIfNeeded(runtimeDependencies: RuntimeDependencies): Promise<{
   disabledService: boolean;
   removedGeneratedConfig: boolean;
   restartedService: boolean;
   stoppedService: boolean;
 }> {
-  const disabledService = await disableInstalledServiceIfNeeded();
-  const stoppedService = await stopInstalledServiceIfNeeded();
+  const disabledService = await disableInstalledServiceIfNeeded(runtimeDependencies);
+  const stoppedService = await stopInstalledServiceIfNeeded(runtimeDependencies);
   const removedGeneratedConfig = await removeGeneratedConfigIfExists();
 
   return {
@@ -926,14 +966,12 @@ async function invalidateGeneratedConfigAndStopServiceIfNeeded(): Promise<{
   };
 }
 
-async function disableInstalledServiceIfNeeded(): Promise<boolean> {
-  const { disableServiceIfInstalled } = await import("./service.js");
-  return disableServiceIfInstalled();
+async function disableInstalledServiceIfNeeded(runtimeDependencies: RuntimeDependencies): Promise<boolean> {
+  return runtimeDependencies.disableIfInstalled();
 }
 
-async function stopInstalledServiceIfNeeded(): Promise<boolean> {
-  const { stopServiceIfInstalled } = await import("./service.js");
-  return stopServiceIfInstalled();
+async function stopInstalledServiceIfNeeded(runtimeDependencies: RuntimeDependencies): Promise<boolean> {
+  return runtimeDependencies.stopIfInstalled();
 }
 
 async function removeGeneratedConfigIfExists(): Promise<boolean> {

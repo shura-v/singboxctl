@@ -1,28 +1,26 @@
 import { FriendlyMessageError } from "./cli.js";
-import { runCommandCapture } from "./process.js";
+import type { AppContext } from "./app-context.js";
+import { createMacOSAppContext } from "./platform/macos.js";
 
-const MAC_PREREQUISITES_MESSAGE = [
-  "macOS prerequisites:",
-  "- Install Homebrew if needed: https://brew.sh/",
-  "- Install sing-box with Homebrew:",
-  "  brew install sing-box"
-].join("\n");
+export type {
+  AppContext,
+  AppService,
+  DesktopOpener,
+  RuntimeDependencies,
+  ServiceInstallResult,
+  ServiceManagerInfo,
+  ServiceStatus
+} from "./app-context.js";
 
-export async function assertMacRuntimePrerequisitesInstalled(): Promise<void> {
-  ensureMacOS();
-
-  if (!(await isCommandAvailable("sing-box"))) {
-    throw new FriendlyMessageError(MAC_PREREQUISITES_MESSAGE);
-  }
-}
-
-export function ensureMacOS(): void {
+export function ensureSupportedPlatform(): void {
   if (process.platform !== "darwin") {
     throw new FriendlyMessageError("singboxctl currently supports only macOS.");
   }
 }
 
-async function isCommandAvailable(command: string): Promise<boolean> {
-  const result = await runCommandCapture("which", [command]);
-  return result.code === 0;
+export function createAppContext(): AppContext {
+  ensureSupportedPlatform();
+  return createMacOSAppContext();
 }
+
+export const ensureMacOS = ensureSupportedPlatform;

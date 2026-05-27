@@ -1,12 +1,12 @@
+import type { AppContext } from "../app-context.js";
 import { log } from "@clack/prompts";
 import { FriendlyMessageError, promptSelect } from "../cli.js";
-import { getServiceLogPath, getServiceStatus, installService, uninstallService } from "../service.js";
 import { setServiceIntent } from "../store.js";
 import { runChildMenuLoop } from "./menu-loop.js";
 
 type ServiceAction = "back" | "install" | "remove" | "status";
 
-export async function runServiceMenu(): Promise<void> {
+export async function runServiceMenu(context: AppContext): Promise<void> {
   await runChildMenuLoop<ServiceAction>({
     select: () =>
       promptSelect<ServiceAction>(
@@ -36,13 +36,13 @@ export async function runServiceMenu(): Promise<void> {
     onSelect: async (action) => {
       switch (action) {
         case "install":
-          await runServiceInstall();
+          await runServiceInstall(context);
           return "continue";
         case "remove":
-          await runServiceRemove();
+          await runServiceRemove(context);
           return "continue";
         case "status":
-          await runServiceStatus();
+          await runServiceStatus(context);
           return "continue";
         case "back":
           return "back";
@@ -51,30 +51,32 @@ export async function runServiceMenu(): Promise<void> {
   });
 }
 
-async function runServiceInstall(): Promise<void> {
-  log.step("Installing launchd service. You may be asked for your macOS password.");
-  const result = await installService();
+async function runServiceInstall(context: AppContext): Promise<void> {
+  const serviceInfo = context.service.getInfo();
+  log.step(`Installing ${serviceInfo.displayName}. You may be asked for your ${serviceInfo.privilegePrompt}.`);
+  const result = await context.service.install();
   await setServiceIntent(true);
   log.success(`Enabled auto-start using ${result.configPath}.`);
 }
 
-async function runServiceRemove(): Promise<void> {
-  log.step("Removing launchd service. You may be asked for your macOS password.");
-  await uninstallService();
+async function runServiceRemove(context: AppContext): Promise<void> {
+  const serviceInfo = context.service.getInfo();
+  log.step(`Removing ${serviceInfo.displayName}. You may be asked for your ${serviceInfo.privilegePrompt}.`);
+  await context.service.uninstall();
   await setServiceIntent(false);
   log.success("Disabled auto-start.");
 }
 
-async function runServiceStatus(): Promise<void> {
-  const status = await getServiceStatus();
+async function runServiceStatus(context: AppContext): Promise<void> {
+  const status = await context.service.getStatus();
 
   if (!status.installed) {
     throw new FriendlyMessageError("Auto-start is not enabled.");
   }
 
-  log.info(`Label: ${status.label}`);
-  log.info(`Plist: ${status.plistPath}`);
+  log.info(`Label: ${status.service.label}`);
+  log.info(`${status.service.definitionLabel}: ${status.service.definitionPath}`);
   log.info(`Config: ${status.configPath}`);
   log.info(`Loaded: ${status.loaded ? "yes" : "no"}`);
-  log.info(`Log: ${getServiceLogPath()}`);
+  log.info(`Log: ${status.service.logPath}`);
 }

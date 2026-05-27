@@ -2,6 +2,7 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
+import { mockRuntimeDependencies } from "./test-helpers.js";
 import {
   FULL_TUNNEL_PROFILE_NAME,
   addConnection,
@@ -17,6 +18,8 @@ import { getActiveSelection, listSelectableOptions, selectAndApplyByName } from 
 const VALID_VLESS_URI =
   "vless://2eaab0cc-7cef-4864-9bfe-c7c2374c5c1f@example.com:443?encryption=none&flow=xtls-rprx-vision&fp=ios&pbk=test-public-key&security=reality&sid=48b32b4141bb&sni=cdn.jsdelivr.net&type=tcp#work";
 
+const runtime = mockRuntimeDependencies();
+
 describe("select-and-apply module", () => {
   beforeEach(async () => {
     process.env.HOME = await mkdtemp(join(tmpdir(), "singboxctl-connect-test-"));
@@ -26,9 +29,9 @@ describe("select-and-apply module", () => {
     await addConnection("Work", VALID_VLESS_URI);
     await addProfile("Office");
     await addRuleSet("Services");
-    await setProfileRuleSets("Office", ["Services"]);
+    await setProfileRuleSets("Office", ["Services"], runtime);
 
-    const selection = await selectAndApplyByName("Work", "Office");
+    const selection = await selectAndApplyByName("Work", "Office", runtime);
 
     expect(selection).toMatchObject({
       connectionName: "Work",
@@ -112,12 +115,12 @@ describe("select-and-apply module", () => {
     );
     await addProfile("Office");
     await addRuleSet("Services");
-    await addRulesToRuleSet("Services", "domain:openai.com");
-    await setProfileRuleSets("Office", ["Services"]);
-    const applied = await selectAndApplyByName("Work", "Office");
+    await addRulesToRuleSet("Services", "domain:openai.com", runtime);
+    await setProfileRuleSets("Office", ["Services"], runtime);
+    const applied = await selectAndApplyByName("Work", "Office", runtime);
     const previousConfigJson = await readFile(applied.configPath, "utf8");
 
-    await expect(selectAndApplyByName("Broken", "Office")).rejects.toThrow(
+    await expect(selectAndApplyByName("Broken", "Office", runtime)).rejects.toThrow(
       'Unsupported VLESS encryption "bad". Only none is supported right now.'
     );
 

@@ -1,6 +1,6 @@
+import type { AppContext } from "../app-context.js";
 import { log } from "@clack/prompts";
 import { FriendlyMessageError, promptConfirm, promptMultiline, promptSelect, promptText } from "../cli.js";
-import { runCommandStreaming } from "../process.js";
 import {
   createRuleSet,
   getRuleSet,
@@ -15,7 +15,7 @@ import { requiredText, runAndLogRuntimeRefresh } from "./shared.js";
 
 type RuleSetsAction = "add" | "back" | "edit" | "remove";
 
-export async function runRulesMenu(): Promise<void> {
+export async function runRulesMenu(context: AppContext): Promise<void> {
   await runChildMenuLoop<RuleSetsAction>({
     select: () =>
       promptSelect<RuleSetsAction>(
@@ -48,10 +48,10 @@ export async function runRulesMenu(): Promise<void> {
           await runRuleSetsAdd();
           return "continue";
         case "edit":
-          await runRuleSetsEdit();
+          await runRuleSetsEdit(context);
           return "continue";
         case "remove":
-          await runRuleSetsRemove();
+          await runRuleSetsRemove(context);
           return "continue";
         case "back":
           return "back";
@@ -72,7 +72,7 @@ async function runRuleSetsAdd(): Promise<void> {
   log.success(`Created rule set "${ruleSet.name}".`);
 }
 
-async function runRuleSetsEdit(): Promise<void> {
+async function runRuleSetsEdit(context: AppContext): Promise<void> {
   const ruleSets = await listRuleSets();
 
   if (ruleSets.length === 0) {
@@ -94,7 +94,7 @@ async function runRuleSetsEdit(): Promise<void> {
     throw new FriendlyMessageError(`Rule set "${ruleSetName}" does not exist.`);
   }
 
-  await runCommandStreaming("open", [getRuleSetFilePath(ruleSet.name)]);
+  await context.desktop.openFile(getRuleSetFilePath(ruleSet.name));
   log.success(`Opened rule set "${ruleSetName}".`);
 
   const editFinished = await promptConfirm({
@@ -110,11 +110,11 @@ async function runRuleSetsEdit(): Promise<void> {
   await getRuleSet(ruleSetName);
 
   await runAndLogRuntimeRefresh({
-    run: () => rebuildGeneratedConfigForActiveSelection()
+    run: () => rebuildGeneratedConfigForActiveSelection(context.service)
   });
 }
 
-async function runRuleSetsRemove(): Promise<void> {
+async function runRuleSetsRemove(context: AppContext): Promise<void> {
   const ruleSets = await listRuleSets();
 
   if (ruleSets.length === 0) {
@@ -130,7 +130,7 @@ async function runRuleSetsRemove(): Promise<void> {
     "Choose a rule set to remove"
   );
 
-  await removeRuleSet(ruleSetName);
+  await removeRuleSet(ruleSetName, context.service);
   log.success(`Removed rule set "${ruleSetName}".`);
 }
 

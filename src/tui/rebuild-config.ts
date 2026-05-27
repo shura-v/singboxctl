@@ -1,10 +1,11 @@
+import type { AppContext } from "../app-context.js";
 import { log } from "@clack/prompts";
 import { FriendlyMessageError } from "../cli.js";
 import { getActiveSelection } from "../select-and-apply.js";
 import { finalizeActiveSelectionRuntime } from "../store.js";
 import { runAndLogRuntimeRefresh } from "./shared.js";
 
-export async function runRebuildConfigFlow(): Promise<void> {
+export async function runRebuildConfigFlow(context: AppContext): Promise<void> {
   const selection = await getActiveSelection();
 
   if (!selection.connectionName || !selection.profileName) {
@@ -12,7 +13,7 @@ export async function runRebuildConfigFlow(): Promise<void> {
   }
 
   const result = await runAndLogRuntimeRefresh({
-    run: () => finalizeActiveSelectionRuntime()
+    run: () => finalizeActiveSelectionRuntime(context.service)
   });
 
   if (!result.activeSelectionComplete) {

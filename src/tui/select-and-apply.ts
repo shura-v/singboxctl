@@ -1,10 +1,11 @@
+import type { AppContext } from "../app-context.js";
 import { log } from "@clack/prompts";
 import { FriendlyMessageError, promptSelect } from "../cli.js";
 import { getActiveSelection, listSelectableOptions, selectAndApplyByName } from "../select-and-apply.js";
 import { FULL_TUNNEL_PROFILE_NAME } from "../store.js";
 import { runAndLogRuntimeRefresh } from "./shared.js";
 
-export async function runSelectAndApplyFlow(): Promise<void> {
+export async function runSelectAndApplyFlow(context: AppContext): Promise<void> {
   const { connections, profiles } = await listSelectableOptions();
 
   if (connections.length === 0) {
@@ -43,7 +44,7 @@ export async function runSelectAndApplyFlow(): Promise<void> {
   );
 
   await runAndLogRuntimeRefresh({
-    run: () => selectAndApplyByName(connectionName, profileName),
+    run: () => selectAndApplyByName(connectionName, profileName, context.service),
     success: (selection) =>
       `Applied connection "${selection.connectionName}" with profile "${selection.profileName}" and wrote ${selection.configPath}.`
   });

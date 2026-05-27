@@ -1,30 +1,22 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
-
-vi.mock("./process.js", () => ({
-  runCommandCapture: vi.fn(),
-  runCommandStreaming: vi.fn()
-}));
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { createMacOSAppContext } from "./platform/macos.js";
+import { ensureMacOS } from "./platform.js";
 
 describe("platform helpers", () => {
   const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
 
   beforeEach(() => {
-    vi.resetModules();
-    vi.clearAllMocks();
     Object.defineProperty(process, "platform", { value: "darwin" });
   });
 
   it("fails with prerequisites text when sing-box is not on PATH", async () => {
-    const { runCommandCapture } = await import("./process.js");
-    vi.mocked(runCommandCapture).mockResolvedValue({
-      code: 1,
-      stderr: "",
-      stdout: ""
+    const context = createMacOSAppContext({
+      pathResolver: async () => {
+        throw new Error("missing");
+      }
     });
 
-    const { assertMacRuntimePrerequisitesInstalled } = await import("./platform.js");
-
-    await expect(assertMacRuntimePrerequisitesInstalled()).rejects.toMatchObject({
+    await expect(context.assertRuntimePrerequisitesInstalled()).rejects.toMatchObject({
       message: [
         "macOS prerequisites:",
         "- Install Homebrew if needed: https://brew.sh/",
@@ -35,22 +27,15 @@ describe("platform helpers", () => {
   });
 
   it("accepts macOS when sing-box is available", async () => {
-    const { runCommandCapture } = await import("./process.js");
-    vi.mocked(runCommandCapture).mockResolvedValue({
-      code: 0,
-      stderr: "",
-      stdout: "/opt/homebrew/bin/sing-box\n"
+    const context = createMacOSAppContext({
+      pathResolver: async () => "/opt/homebrew/bin/sing-box"
     });
 
-    const { assertMacRuntimePrerequisitesInstalled } = await import("./platform.js");
-
-    await expect(assertMacRuntimePrerequisitesInstalled()).resolves.toBeUndefined();
+    await expect(context.assertRuntimePrerequisitesInstalled()).resolves.toBeUndefined();
   });
 
-  it("fails outside macOS", async () => {
+  it("fails outside macOS", () => {
     Object.defineProperty(process, "platform", { value: "win32" });
-    const { ensureMacOS } = await import("./platform.js");
-
     expect(() => ensureMacOS()).toThrow("singboxctl currently supports only macOS.");
   });
 

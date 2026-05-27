@@ -1,3 +1,4 @@
+import type { AppContext } from "../app-context.js";
 import { log } from "@clack/prompts";
 import { FriendlyMessageError, promptSelect } from "../cli.js";
 import { getIpv6Enabled, setIpv6Enabled } from "../store.js";
@@ -6,7 +7,7 @@ import { runAndLogRuntimeRefresh } from "./shared.js";
 
 type IPv6Action = "back" | "disable" | "enable";
 
-export async function runIpv6Menu(): Promise<void> {
+export async function runIpv6Menu(context: AppContext): Promise<void> {
   await runChildMenuLoop<IPv6Action>({
     select: async () => {
       const ipv6Enabled = await getIpv6Enabled();
@@ -34,10 +35,10 @@ export async function runIpv6Menu(): Promise<void> {
     onSelect: async (action) => {
       switch (action) {
         case "enable":
-          await runSetIpv6Enabled(true);
+          await runSetIpv6Enabled(context, true);
           return "continue";
         case "disable":
-          await runSetIpv6Enabled(false);
+          await runSetIpv6Enabled(context, false);
           return "continue";
         case "back":
           return "back";
@@ -46,7 +47,7 @@ export async function runIpv6Menu(): Promise<void> {
   });
 }
 
-async function runSetIpv6Enabled(enabled: boolean): Promise<void> {
+async function runSetIpv6Enabled(context: AppContext, enabled: boolean): Promise<void> {
   const wasEnabled = await getIpv6Enabled();
 
   if (wasEnabled === enabled) {
@@ -54,7 +55,7 @@ async function runSetIpv6Enabled(enabled: boolean): Promise<void> {
   }
 
   await runAndLogRuntimeRefresh({
-    run: () => setIpv6Enabled(enabled),
+    run: () => setIpv6Enabled(enabled, context.service),
     success: () => `IPv6 ${enabled ? "enabled" : "disabled"}.`
   });
 }

@@ -1,3 +1,4 @@
+import type { RuntimeDependencies } from "./app-context.js";
 import {
   type ActiveSelectionRuntimeResult,
   applyActiveSelection,
@@ -21,9 +22,10 @@ export type SelectAndApplyResult = ActiveSelectionRuntimeResult & {
 
 export async function selectAndApplyByName(
   connectionName: string,
-  profileName: string
+  profileName: string,
+  runtimeDependencies: RuntimeDependencies
 ): Promise<SelectAndApplyResult> {
-  const result = await applyActiveSelection(connectionName, profileName);
+  const result = await applyActiveSelection(connectionName, profileName, runtimeDependencies);
 
   if (!result.activeSelectionComplete || !result.configPath) {
     throw new Error("Invariant violation: active selection runtime finalization did not produce config.json.");

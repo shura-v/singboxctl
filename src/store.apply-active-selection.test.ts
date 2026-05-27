@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mockRuntimeDependencies } from "./test-helpers.js";
 
 describe("applyActiveSelection", () => {
   beforeEach(async () => {
@@ -22,12 +23,6 @@ describe("applyActiveSelection", () => {
       }
     }));
 
-    vi.doMock("./service.js", () => ({
-      restartServiceIfInstalled: async () => {
-        throw new Error("kickstart failed");
-      }
-    }));
-
     const {
       addConnection,
       addProfile,
@@ -43,7 +38,13 @@ describe("applyActiveSelection", () => {
     await addProfile("Office");
     await setActiveSelection("Old", "Office");
 
-    await expect(applyActiveSelection("New", "Office")).rejects.toThrow("kickstart failed");
+    await expect(
+      applyActiveSelection("New", "Office", mockRuntimeDependencies({
+        restartIfInstalled: async () => {
+          throw new Error("kickstart failed");
+        },
+      }))
+    ).rejects.toThrow("kickstart failed");
 
     expect(await getActiveConnectionName()).toBe("New");
     expect(await getActiveProfileName()).toBe("Office");

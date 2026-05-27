@@ -1,6 +1,6 @@
+import type { AppContext, ServiceStatus } from "./app-context.js";
 import { FriendlyMessageError } from "./cli.js";
 import { resolveCommandPath, runCommandStreaming } from "./process.js";
-import { getServiceStatus, type ServiceStatus } from "./service.js";
 import { getGeneratedConfigPath } from "./store.js";
 import { access } from "node:fs/promises";
 
@@ -14,9 +14,10 @@ export type ConnectResult = {
 };
 
 export async function connect(
+  context: Pick<AppContext, "service">,
   streamingRunner: StreamingRunner = runCommandStreaming,
   pathResolver: PathResolver = resolveCommandPath,
-  serviceStatusGetter: ServiceStatusGetter = getServiceStatus
+  serviceStatusGetter: ServiceStatusGetter = () => context.service.getStatus()
 ): Promise<ConnectResult> {
   const configPath = getGeneratedConfigPath();
   await assertConfigExists(configPath);
@@ -59,7 +60,7 @@ async function assertServiceNotLoaded(serviceStatusGetter: ServiceStatusGetter):
 
   if (status.loaded) {
     throw new FriendlyMessageError(
-      `Launchd service "${status.label}" is already running. Stop or remove it before using foreground connect.`
+      `${status.service.displayName} "${status.service.label}" is already running. Stop or remove it before using foreground connect.`
     );
   }
 }

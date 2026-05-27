@@ -1,3 +1,4 @@
+import type { AppContext } from "./app-context.js";
 import { outro } from "@clack/prompts";
 import { promptSelect } from "./cli.js";
 import { ensureDataDirectories, getActiveConnectionName, getActiveProfileName, getIpv6Enabled } from "./store.js";
@@ -25,7 +26,7 @@ type MenuAction =
   | "select-and-apply"
   | "service";
 
-export async function runTui(): Promise<void> {
+export async function runTui(context: AppContext): Promise<void> {
   await ensureDataDirectories();
 
   await runRootMenuLoop<MenuAction>({
@@ -33,6 +34,7 @@ export async function runTui(): Promise<void> {
       const activeConnectionName = await getActiveConnectionName();
       const activeProfileName = await getActiveProfileName();
       const ipv6Enabled = await getIpv6Enabled();
+      const serviceInfo = context.service.getInfo();
 
       return promptSelect<MenuAction>(
         [
@@ -92,7 +94,7 @@ export async function runTui(): Promise<void> {
           {
             value: "logs",
             label: "Logs",
-            hint: "Open or clear the launchd service log"
+            hint: `Open or clear the ${serviceInfo.displayName} log`
           },
           {
             value: "exit",
@@ -105,32 +107,32 @@ export async function runTui(): Promise<void> {
     onSelect: async (action) => {
       switch (action) {
         case "connect":
-          await runConnectFlow();
+          await runConnectFlow(context);
           return "continue";
         case "select-and-apply":
-          await runSelectAndApplyFlow();
+          await runSelectAndApplyFlow(context);
           return "continue";
         case "connections":
-          await runConnectionsMenu();
+          await runConnectionsMenu(context);
           return "continue";
         case "profiles":
-          await runProfilesMenu();
+          await runProfilesMenu(context);
           return "continue";
         case "ipv6":
-          await runIpv6Menu();
+          await runIpv6Menu(context);
           return "continue";
         case "rule-sets":
-          await runRulesMenu();
+          await runRulesMenu(context);
           return "continue";
         case "section-run":
         case "section-manage":
         case "section-system":
           return "continue";
         case "logs":
-          await runLogsMenu();
+          await runLogsMenu(context);
           return "continue";
         case "service":
-          await runServiceMenu();
+          await runServiceMenu(context);
           return "continue";
         case "exit":
           outro("Bye.");
