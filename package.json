@@ -19,6 +19,7 @@
     "changeset": "changeset",
     "dev": "npm run build && node dist/index.js",
     "prepack": "npm run build",
+    "release": "npm run build && changeset publish",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "version-packages": "changeset version && npm install --package-lock-only"

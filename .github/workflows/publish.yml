@@ -39,7 +39,7 @@ jobs:
           commit: "chore: version packages"
           title: "chore: version packages"
           version: npm run version-packages
-          publish: npm run build && npx changeset publish
+          publish: npm run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
