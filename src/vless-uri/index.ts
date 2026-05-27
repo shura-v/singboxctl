@@ -13,7 +13,7 @@ export function parseVlessUriToSingBoxOutbound(uri: string): VlessOutbound {
   return parseVlessUriToSingBoxOutboundDetailed(uri).outbound;
 }
 
-export function validateConnectionUri(uri: string): string[] {
+export function validateVlessConnectionUri(uri: string): string[] {
   return parseVlessUriToSingBoxOutboundDetailed(uri).warnings;
 }
 

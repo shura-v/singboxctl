@@ -1,8 +1,8 @@
 import type { AppContext } from "../app-context.js";
 import { log } from "@clack/prompts";
 import { FriendlyMessageError, promptSelect, promptText } from "../cli.js";
+import { validateConnectionUri } from "../connection-uri.js";
 import { addConnection, listConnections, removeConnection, updateConnection } from "../store.js";
-import { validateConnectionUri } from "../vless-uri/index.js";
 import { runChildMenuLoop } from "./menu-loop.js";
 import { readConnectionNameDefault, requiredText, truncate } from "./shared.js";
 
@@ -59,7 +59,7 @@ export async function runConnectionsMenu(context: AppContext): Promise<void> {
 async function runConnectionsAdd(): Promise<void> {
   const uri = await promptText({
     message: "Connection URI",
-    placeholder: "vless://...",
+    placeholder: "vless://... or hysteria2://...",
     validate: requiredText("Connection URI is required.")
   });
   const warnings = await validateConnectionUri(uri);
@@ -110,7 +110,7 @@ async function runConnectionsEdit(context: AppContext): Promise<void> {
 
   const uri = await promptText({
     message: "Connection URI",
-    placeholder: "vless://...",
+    placeholder: "vless://... or hysteria2://...",
     initialValue: connection.uri,
     validate: requiredText("Connection URI is required.")
   });

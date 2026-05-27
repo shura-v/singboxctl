@@ -19,6 +19,9 @@ import {
 const VALID_VLESS_URI =
   "vless://2eaab0cc-7cef-4864-9bfe-c7c2374c5c1f@example.com:443?encryption=none&flow=xtls-rprx-vision&fp=ios&pbk=test-public-key&security=reality&sid=48b32b4141bb&sni=cdn.jsdelivr.net&type=tcp#work";
 
+const VALID_HYSTERIA2_URI =
+  "hysteria2://8f5726803bd04c1fbd022537bb5c7ca6@x.shura.dev:20117?alpn=h3&fp=chrome&security=tls&sni=x.shura.dev#x-hysteria-kolyan";
+
 const runtime = mockRuntimeDependencies();
 
 describe("sing-box config builder", () => {
@@ -128,6 +131,29 @@ describe("sing-box config builder", () => {
     });
     expect(writtenConfig.outbounds[0]).not.toHaveProperty("network");
     expect(writtenConfig.outbounds[0]).not.toHaveProperty("packet_encoding");
+  });
+
+  it("builds and writes a generated sing-box config for a hysteria2 connection", async () => {
+    await addConnection("Kolyan", VALID_HYSTERIA2_URI);
+    await addProfile("Office");
+
+    const result = await buildAndWriteGeneratedConfig("Kolyan", "Office");
+    const writtenConfig = JSON.parse(await readFile(result.configPath, "utf8")) as {
+      outbounds: Array<Record<string, unknown>>;
+    };
+
+    expect(writtenConfig.outbounds[0]).toEqual({
+      type: "hysteria2",
+      tag: "proxy",
+      server: "x.shura.dev",
+      server_port: 20117,
+      password: "8f5726803bd04c1fbd022537bb5c7ca6",
+      tls: {
+        enabled: true,
+        server_name: "x.shura.dev",
+        alpn: ["h3"]
+      }
+    });
   });
 
   it("accepts optional whitespace after the rule prefix", () => {
