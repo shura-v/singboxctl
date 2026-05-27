@@ -1,5 +1,11 @@
 # singboxctl
 
+## 0.1.1
+
+### Patch Changes
+
+- 7ec97c0: Move the IPv6 menu item below Rule Sets in the root TUI menu for a clearer management section order.
+
 ## 0.1.0
 
 ### Minor Changes
