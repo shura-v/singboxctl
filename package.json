@@ -1,6 +1,6 @@
 {
   "name": "singboxctl",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "Shura Vlasov",
   "description": "Minimal CLI scaffold for sing-box on macOS.",
   "license": "MIT",
