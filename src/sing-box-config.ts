@@ -12,7 +12,7 @@ import {
   type ConnectionRecord,
   type ProfileRecord
 } from "./store.js";
-import { parseConnectionUriToSingBoxOutbound } from "./connection-uri.js";
+import { parseConnectionUriToSingBoxOutbound, type ConnectionGenerationOptions } from "./connection-uri.js";
 
 type ProxyRouteRule = {
   action: "route";
@@ -73,19 +73,21 @@ export type GeneratedConfigResult = {
 
 export async function buildAndWriteGeneratedConfig(
   connectionName: string,
-  profileName: string
+  profileName: string,
+  options: ConnectionGenerationOptions = {}
 ): Promise<GeneratedConfigResult> {
   const [connection, profile] = await Promise.all([getConnection(connectionName), getProfile(profileName)]);
-  const config = await buildSingBoxConfig(connection, profile);
+  const config = await buildSingBoxConfig(connection, profile, options);
   const configPath = await writeGeneratedConfig(config);
   return { config, configPath };
 }
 
 export async function buildSingBoxConfig(
   connection: ConnectionRecord,
-  profile: ProfileRecord
+  profile: ProfileRecord,
+  options: ConnectionGenerationOptions = {}
 ): Promise<SingBoxConfig> {
-  const proxyOutbound = parseConnectionUriToSingBoxOutbound(connection.uri);
+  const proxyOutbound = parseConnectionUriToSingBoxOutbound(connection.uri, options);
   const [ipv6Enabled, logLevel] = await Promise.all([getIpv6Enabled(), getLogLevel()]);
   const profileRules = profile.builtIn ? [] : await readProfileRules(profile);
   const rules = [

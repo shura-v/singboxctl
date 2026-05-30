@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { RuntimeDependencies } from "./app-context.js";
 import { FriendlyMessageError } from "./cli.js";
+import { isNaiveConnectionUri, type ConnectionGenerationOptions } from "./connection-uri.js";
 
 export type ConnectionRecord = {
   name: string;
@@ -39,6 +40,7 @@ type AppState = {
   activeProfileName?: string;
   ipv6Enabled?: boolean;
   logLevel?: LogLevel;
+  naiveUdpOverTcp?: boolean;
   serviceIntent?: boolean;
 };
 
@@ -408,7 +410,15 @@ export async function getActiveConnectionName(): Promise<string | undefined> {
   return (await readState()).activeConnectionName;
 }
 
-export async function setActiveSelection(connectionName: string, profileName: string): Promise<void> {
+export async function getNaiveUdpOverTcpEnabled(): Promise<boolean> {
+  return (await readState()).naiveUdpOverTcp === true;
+}
+
+export async function setActiveSelection(
+  connectionName: string,
+  profileName: string,
+  options: ConnectionGenerationOptions = {}
+): Promise<void> {
   const connection = await readConnectionIfExists(connectionName);
   const profile = await readProfileIfExists(profileName);
 
@@ -423,6 +433,7 @@ export async function setActiveSelection(connectionName: string, profileName: st
   const state = await readState();
   state.activeConnectionName = connectionName;
   state.activeProfileName = profileName;
+  applyConnectionGenerationOptionsToState(state, connection.uri, options);
   await writeState(state);
 }
 
@@ -539,12 +550,15 @@ export async function finalizeActiveSelectionRuntime(
 export async function applyActiveSelection(
   connectionName: string,
   profileName: string,
-  runtimeDependencies: RuntimeDependencies
+  runtimeDependencies: RuntimeDependencies,
+  options: ConnectionGenerationOptions = {}
 ): Promise<ActiveSelectionRuntimeResult> {
-  const configPath = await buildGeneratedConfigForSelection(connectionName, profileName);
+  const configPath = await buildGeneratedConfigForSelection(connectionName, profileName, options);
   const state = await readState();
+  const connection = await getConnection(connectionName);
   state.activeConnectionName = connectionName;
   state.activeProfileName = profileName;
+  applyConnectionGenerationOptionsToState(state, connection.uri, options);
   await writeState(state);
   const restartedService = await restartInstalledServiceIfNeeded(runtimeDependencies);
 
@@ -563,7 +577,12 @@ async function synchronizeRuntimeForSelection(
   profileName: string,
   runtimeDependencies: RuntimeDependencies
 ): Promise<ActiveSelectionRuntimeResult> {
-  const configPath = await buildGeneratedConfigForSelection(connectionName, profileName);
+  const state = await readState();
+  const configPath = await buildGeneratedConfigForSelection(
+    connectionName,
+    profileName,
+    buildConnectionGenerationOptionsFromState(state)
+  );
   const restartedService = await restartInstalledServiceIfNeeded(runtimeDependencies);
 
   return {
@@ -578,10 +597,11 @@ async function synchronizeRuntimeForSelection(
 
 async function buildGeneratedConfigForSelection(
   connectionName: string,
-  profileName: string
+  profileName: string,
+  options: ConnectionGenerationOptions = {}
 ): Promise<string> {
   const { buildAndWriteGeneratedConfig } = await import("./sing-box-config.js");
-  const { configPath } = await buildAndWriteGeneratedConfig(connectionName, profileName);
+  const { configPath } = await buildAndWriteGeneratedConfig(connectionName, profileName, options);
   return configPath;
 }
 
@@ -946,6 +966,25 @@ async function readState(): Promise<AppState> {
 async function writeState(state: AppState): Promise<void> {
   await ensureDataDirectories();
   await writeJson(getStatePath(), state);
+}
+
+function applyConnectionGenerationOptionsToState(
+  state: AppState,
+  connectionUri: string,
+  options: ConnectionGenerationOptions
+): void {
+  if (isNaiveConnectionUri(connectionUri)) {
+    state.naiveUdpOverTcp = options.naiveUdpOverTcp === true;
+    return;
+  }
+
+  delete state.naiveUdpOverTcp;
+}
+
+function buildConnectionGenerationOptionsFromState(state: AppState): ConnectionGenerationOptions {
+  return {
+    naiveUdpOverTcp: state.naiveUdpOverTcp === true
+  };
 }
 
 async function invalidateGeneratedConfigAndStopServiceIfNeeded(runtimeDependencies: RuntimeDependencies): Promise<{

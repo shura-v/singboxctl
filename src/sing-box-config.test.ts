@@ -21,6 +21,7 @@ const VALID_VLESS_URI =
 
 const VALID_HYSTERIA2_URI =
   "hysteria2://8f5726803bd04c1fbd022537bb5c7ca6@x.shura.dev:20117?alpn=h3&fp=chrome&security=tls&sni=x.shura.dev#x-hysteria-kolyan";
+const VALID_NAIVE_URI = "naive+https://alice:secret@example.com:443?sni=edge.example.com#work";
 
 const runtime = mockRuntimeDependencies();
 
@@ -134,10 +135,10 @@ describe("sing-box config builder", () => {
   });
 
   it("builds and writes a generated sing-box config for a hysteria2 connection", async () => {
-    await addConnection("Kolyan", VALID_HYSTERIA2_URI);
+    await addConnection("HysterTest", VALID_HYSTERIA2_URI);
     await addProfile("Office");
 
-    const result = await buildAndWriteGeneratedConfig("Kolyan", "Office");
+    const result = await buildAndWriteGeneratedConfig("HysterTest", "Office");
     const writtenConfig = JSON.parse(await readFile(result.configPath, "utf8")) as {
       outbounds: Array<Record<string, unknown>>;
     };
@@ -152,6 +153,53 @@ describe("sing-box config builder", () => {
         enabled: true,
         server_name: "x.shura.dev",
         alpn: ["h3"]
+      }
+    });
+  });
+
+  it("builds and writes a generated sing-box config for a naive connection", async () => {
+    await addConnection("Naive", VALID_NAIVE_URI);
+    await addProfile("Office");
+
+    const result = await buildAndWriteGeneratedConfig("Naive", "Office");
+    const writtenConfig = JSON.parse(await readFile(result.configPath, "utf8")) as {
+      outbounds: Array<Record<string, unknown>>;
+    };
+
+    expect(writtenConfig.outbounds[0]).toEqual({
+      type: "naive",
+      tag: "proxy",
+      server: "example.com",
+      server_port: 443,
+      username: "alice",
+      password: "secret",
+      tls: {
+        enabled: true,
+        server_name: "edge.example.com"
+      }
+    });
+  });
+
+  it("adds udp_over_tcp to a naive outbound only when requested", async () => {
+    await addConnection("Naive", VALID_NAIVE_URI);
+    await addProfile("Office");
+
+    const result = await buildAndWriteGeneratedConfig("Naive", "Office", { naiveUdpOverTcp: true });
+    const writtenConfig = JSON.parse(await readFile(result.configPath, "utf8")) as {
+      outbounds: Array<Record<string, unknown>>;
+    };
+
+    expect(writtenConfig.outbounds[0]).toEqual({
+      type: "naive",
+      tag: "proxy",
+      server: "example.com",
+      server_port: 443,
+      username: "alice",
+      password: "secret",
+      udp_over_tcp: true,
+      tls: {
+        enabled: true,
+        server_name: "edge.example.com"
       }
     });
   });

@@ -40,7 +40,8 @@ describe("select-and-apply module", () => {
     });
     expect(await getActiveSelection()).toEqual({
       connectionName: "Work",
-      profileName: "Office"
+      profileName: "Office",
+      naiveUdpOverTcp: false
     });
 
     const configJson = JSON.parse(await readFile(selection.configPath, "utf8")) as {
@@ -127,7 +128,21 @@ describe("select-and-apply module", () => {
     expect(await readFile(getGeneratedConfigPath(), "utf8")).toBe(previousConfigJson);
     expect(await getActiveSelection()).toEqual({
       connectionName: "Work",
-      profileName: "Office"
+      profileName: "Office",
+      naiveUdpOverTcp: false
+    });
+  });
+
+  it("returns the saved naive UDP over TCP choice in the active selection", async () => {
+    await addConnection("Naive", "naive+https://alice:secret@example.com:443?sni=edge.example.com");
+    await addProfile("Office");
+
+    await selectAndApplyByName("Naive", "Office", runtime, { naiveUdpOverTcp: true });
+
+    expect(await getActiveSelection()).toEqual({
+      connectionName: "Naive",
+      profileName: "Office",
+      naiveUdpOverTcp: true
     });
   });
 });
