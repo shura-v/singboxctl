@@ -2,14 +2,18 @@ import type { RuntimeDependencies } from "./app-context.js";
 import {
   type ActiveSelectionRuntimeResult,
   applyActiveSelection,
+  getConnection,
   getActiveConnectionName,
   getActiveProfileName,
+  getNaiveUdpOverTcpEnabled,
   listConnections,
   listProfiles,
 } from "./store.js";
+import { isNaiveConnectionUri, type ConnectionGenerationOptions } from "./connection-uri.js";
 
 export type ActiveSelection = {
   connectionName?: string;
+  naiveUdpOverTcp: boolean;
   profileName?: string;
 };
 
@@ -23,9 +27,10 @@ export type SelectAndApplyResult = ActiveSelectionRuntimeResult & {
 export async function selectAndApplyByName(
   connectionName: string,
   profileName: string,
-  runtimeDependencies: RuntimeDependencies
+  runtimeDependencies: RuntimeDependencies,
+  options: ConnectionGenerationOptions = {}
 ): Promise<SelectAndApplyResult> {
-  const result = await applyActiveSelection(connectionName, profileName, runtimeDependencies);
+  const result = await applyActiveSelection(connectionName, profileName, runtimeDependencies, options);
 
   if (!result.activeSelectionComplete || !result.configPath) {
     throw new Error("Invariant violation: active selection runtime finalization did not produce config.json.");
@@ -44,14 +49,16 @@ export async function selectAndApplyByName(
 }
 
 export async function getActiveSelection(): Promise<ActiveSelection> {
-  const [connectionName, profileName] = await Promise.all([
+  const [connectionName, profileName, naiveUdpOverTcp] = await Promise.all([
     getActiveConnectionName(),
-    getActiveProfileName()
+    getActiveProfileName(),
+    getNaiveUdpOverTcpEnabled()
   ]);
 
   return {
     connectionName,
-    profileName
+    profileName,
+    naiveUdpOverTcp
   };
 }
 
@@ -65,4 +72,9 @@ export async function listSelectableOptions(): Promise<{
     connections: connections.map((connection) => ({ name: connection.name })),
     profiles: profiles.map((profile) => ({ name: profile.name }))
   };
+}
+
+export async function isNaiveConnectionSelection(connectionName: string): Promise<boolean> {
+  const connection = await getConnection(connectionName);
+  return isNaiveConnectionUri(connection.uri);
 }

@@ -15,7 +15,7 @@
 ## Current Limitations
 
 - macOS only
-- Connection import currently supports a narrow subset of `vless://` and `hysteria2://` URIs
+- Connection import currently supports a narrow subset of `vless://`, `hysteria2://`, and `naive+https://` / `naive+quic://` URIs
 - Supported rule formats are currently `domain:...`, `domain_suffix:...`, and `ip_cidr:...`
 - Unsupported URI or rule features fail explicitly instead of being guessed
 
@@ -46,6 +46,26 @@ For Hysteria2 URIs, the auth value is read from the URI userinfo segment:
 Provider links in the wild may also include extra Hysteria2 parameters such as `fp`. Provider-link fields are documented separately from guaranteed generated `sing-box` runtime support: if a field is not listed above in the supported subset, do not assume it is applied to `config.json` just because it appears in a provider URI.
 
 Unsupported Hysteria2 features fail explicitly.
+
+#### Naive
+
+Currently supported:
+
+- `naive+https://` and `naive+quic://`
+- username and password in URI userinfo
+- optional `sni`
+- optional `extra-headers`
+- optional generated `udp_over_tcp: true` when enabled during `Select connection and profile`
+
+For Naive URIs, the auth values are read from the URI userinfo segment:
+
+`naive+https://<username>:<password>@example.com:443?...`
+
+Provider links in the wild may also include extra Naive parameters such as `padding`. Provider-link fields are documented separately from guaranteed generated `sing-box` runtime support: if a field is not listed above in the supported subset, do not assume it is applied to `config.json` just because it appears in a provider URI.
+
+Currently, `padding` is accepted with a warning and is not applied to the generated `sing-box` config.
+
+Unsupported Naive features fail explicitly.
 
 ## Install
 

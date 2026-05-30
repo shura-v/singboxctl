@@ -1,7 +1,12 @@
 import type { AppContext } from "../app-context.js";
 import { log } from "@clack/prompts";
-import { FriendlyMessageError, promptSelect } from "../cli.js";
-import { getActiveSelection, listSelectableOptions, selectAndApplyByName } from "../select-and-apply.js";
+import { FriendlyMessageError, promptConfirm, promptSelect } from "../cli.js";
+import {
+  getActiveSelection,
+  isNaiveConnectionSelection,
+  listSelectableOptions,
+  selectAndApplyByName
+} from "../select-and-apply.js";
 import { FULL_TUNNEL_PROFILE_NAME } from "../store.js";
 import { runAndLogRuntimeRefresh } from "./shared.js";
 
@@ -19,6 +24,7 @@ export async function runSelectAndApplyFlow(context: AppContext): Promise<void> 
   const currentSelection = await getActiveSelection();
   const currentConnectionName = currentSelection.connectionName;
   const currentProfileName = currentSelection.profileName;
+  const currentNaiveUdpOverTcp = currentSelection.naiveUdpOverTcp;
 
   const connectionName = await promptSelect(
     connections.map((connection) => ({
@@ -43,9 +49,25 @@ export async function runSelectAndApplyFlow(context: AppContext): Promise<void> 
     "Choose a profile"
   );
 
+  const naiveUdpOverTcp = await promptNaiveUdpOverTcpIfNeeded(connectionName, currentNaiveUdpOverTcp);
+
   await runAndLogRuntimeRefresh({
-    run: () => selectAndApplyByName(connectionName, profileName, context.service),
+    run: () => selectAndApplyByName(connectionName, profileName, context.service, { naiveUdpOverTcp }),
     success: (selection) =>
       `Applied connection "${selection.connectionName}" with profile "${selection.profileName}" and wrote ${selection.configPath}.`
+  });
+}
+
+async function promptNaiveUdpOverTcpIfNeeded(
+  connectionName: string,
+  currentNaiveUdpOverTcp: boolean
+): Promise<boolean | undefined> {
+  if (!(await isNaiveConnectionSelection(connectionName))) {
+    return undefined;
+  }
+
+  return promptConfirm({
+    message: "Enable UDP over TCP for this Naive connection?",
+    initialValue: currentNaiveUdpOverTcp
   });
 }

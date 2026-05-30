@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseConnectionUriToSingBoxOutbound, validateConnectionUri } from "./connection-uri.js";
+import { isNaiveConnectionUri, parseConnectionUriToSingBoxOutbound, validateConnectionUri } from "./connection-uri.js";
 
 describe("connection uri parser", () => {
   it("dispatches vless URIs to the vless parser", () => {
@@ -32,6 +32,41 @@ describe("connection uri parser", () => {
     });
   });
 
+  it("dispatches naive URIs to the naive parser", () => {
+    expect(
+      parseConnectionUriToSingBoxOutbound("naive+https://alice:secret@example.com:443?sni=edge.example.com#work")
+    ).toEqual({
+      type: "naive",
+      server: "example.com",
+      server_port: 443,
+      username: "alice",
+      password: "secret",
+      tls: {
+        enabled: true,
+        server_name: "edge.example.com"
+      }
+    });
+  });
+
+  it("enables UDP over TCP for naive URIs when requested", () => {
+    expect(
+      parseConnectionUriToSingBoxOutbound("naive+https://alice:secret@example.com:443?sni=edge.example.com#work", {
+        naiveUdpOverTcp: true
+      })
+    ).toEqual({
+      type: "naive",
+      server: "example.com",
+      server_port: 443,
+      username: "alice",
+      password: "secret",
+      udp_over_tcp: true,
+      tls: {
+        enabled: true,
+        server_name: "edge.example.com"
+      }
+    });
+  });
+
   it("rejects unsupported URI schemes", () => {
     expect(() => validateConnectionUri("trojan://secret@example.com:443")).toThrow(
       'Unsupported connection URI scheme "trojan:".'
@@ -44,5 +79,16 @@ describe("connection uri parser", () => {
     ).toEqual([
       'Hysteria2 fp="chrome" is present in the provider URI but is not supported yet in the generated sing-box config.'
     ]);
+  });
+
+  it("surfaces naive warnings through the shared validator", () => {
+    expect(validateConnectionUri("naive+https://alice:secret@example.com:443?padding=true#work")).toEqual([
+      'Naive padding="true" is present in the provider URI but is not supported yet in the generated sing-box config.'
+    ]);
+  });
+
+  it("detects naive URI schemes", () => {
+    expect(isNaiveConnectionUri("naive+https://alice:secret@example.com:443")).toBe(true);
+    expect(isNaiveConnectionUri("vless://id@example.com:443?encryption=none&security=none&type=tcp")).toBe(false);
   });
 });
