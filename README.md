@@ -15,7 +15,12 @@
 ## Current Limitations
 
 - macOS only
-- Connection import currently supports a narrow subset of `vless://`, `hysteria2://`, and `naive+https://` / `naive+quic://` URIs
+- Connection import currently supports a narrow subset of these URI protocols:
+  - `vless://`
+  - `trojan://`
+  - `hysteria2://`
+  - `naive+https://`
+  - `naive+quic://`
 - Supported rule formats are currently `domain:...`, `domain_suffix:...`, and `ip_cidr:...`
 - Unsupported URI or rule features fail explicitly instead of being guessed
 
@@ -30,6 +35,26 @@ Currently supported:
 - REALITY with `flow=xtls-rprx-vision`
 
 Unsupported VLESS features fail explicitly.
+
+#### Trojan
+
+Currently supported:
+
+- `type=tcp`
+- `security=reality`
+- REALITY with required `pbk` and `sni`
+- optional `sid`
+- optional `fp`
+
+For Trojan URIs, the password is read from the URI userinfo segment:
+
+`trojan://<password>@example.com:443?...`
+
+Provider links in the wild may also include extra Trojan parameters such as `spx`. Provider-link fields are documented separately from guaranteed generated `sing-box` runtime support: if a field is not listed above in the supported subset, do not assume it is applied to `config.json` just because it appears in a provider URI.
+
+Currently, `spx` is accepted with a warning and is not applied to the generated `sing-box` config.
+
+Unsupported Trojan features fail explicitly.
 
 #### Hysteria2
 

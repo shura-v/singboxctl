@@ -32,6 +32,33 @@ describe("connection uri parser", () => {
     });
   });
 
+  it("dispatches trojan URIs to the trojan parser", () => {
+    expect(
+      parseConnectionUriToSingBoxOutbound(
+        "trojan://secret@example.com:443?fp=ios&pbk=test-public-key&security=reality&sid=7168&sni=cdn.jsdelivr.net&type=tcp#work"
+      )
+    ).toEqual({
+      type: "trojan",
+      server: "example.com",
+      server_port: 443,
+      password: "secret",
+      tls: {
+        enabled: true,
+        insecure: false,
+        server_name: "cdn.jsdelivr.net",
+        reality: {
+          enabled: true,
+          public_key: "test-public-key",
+          short_id: "7168"
+        },
+        utls: {
+          enabled: true,
+          fingerprint: "ios"
+        }
+      }
+    });
+  });
+
   it("dispatches naive URIs to the naive parser", () => {
     expect(
       parseConnectionUriToSingBoxOutbound("naive+https://alice:secret@example.com:443?sni=edge.example.com#work")
@@ -68,8 +95,8 @@ describe("connection uri parser", () => {
   });
 
   it("rejects unsupported URI schemes", () => {
-    expect(() => validateConnectionUri("trojan://secret@example.com:443")).toThrow(
-      'Unsupported connection URI scheme "trojan:".'
+    expect(() => validateConnectionUri("ss://secret@example.com:443")).toThrow(
+      'Unsupported connection URI scheme "ss:".'
     );
   });
 
@@ -84,6 +111,16 @@ describe("connection uri parser", () => {
   it("surfaces naive warnings through the shared validator", () => {
     expect(validateConnectionUri("naive+https://alice:secret@example.com:443?padding=true#work")).toEqual([
       'Naive padding="true" is present in the provider URI but is not supported yet in the generated sing-box config.'
+    ]);
+  });
+
+  it("surfaces trojan warnings through the shared validator", () => {
+    expect(
+      validateConnectionUri(
+        "trojan://secret@example.com:443?pbk=test-public-key&security=reality&sni=example.com&spx=%2Fpath&type=tcp#work"
+      )
+    ).toEqual([
+      'Trojan spx="/path" is present in the provider URI but is not supported yet in the generated sing-box config.'
     ]);
   });
 
