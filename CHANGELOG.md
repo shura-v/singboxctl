@@ -1,5 +1,11 @@
 # singboxctl
 
+## 0.3.1
+
+### Patch Changes
+
+- 2b14ba6: Add narrow Trojan REALITY TCP URI import support.
+
 ## 0.3.0
 
 ### Minor Changes
