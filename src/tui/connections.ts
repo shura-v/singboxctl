@@ -59,7 +59,7 @@ export async function runConnectionsMenu(context: AppContext): Promise<void> {
 async function runConnectionsAdd(): Promise<void> {
   const uri = await promptText({
     message: "Connection URI",
-    placeholder: "vless://... or hysteria2://...",
+    placeholder: "vless://... or trojan://...",
     validate: requiredText("Connection URI is required.")
   });
   const warnings = await validateConnectionUri(uri);
@@ -110,7 +110,7 @@ async function runConnectionsEdit(context: AppContext): Promise<void> {
 
   const uri = await promptText({
     message: "Connection URI",
-    placeholder: "vless://... or hysteria2://...",
+    placeholder: "vless://... or trojan://...",
     initialValue: connection.uri,
     validate: requiredText("Connection URI is required.")
   });

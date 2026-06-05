@@ -21,6 +21,8 @@ const VALID_VLESS_URI =
 
 const VALID_HYSTERIA2_URI =
   "hysteria2://8f5726803bd04c1fbd022537bb5c7ca6@x.shura.dev:20117?alpn=h3&fp=chrome&security=tls&sni=x.shura.dev#x-hysteria-kolyan";
+const VALID_TROJAN_URI =
+  "trojan://ziw1fjdxrcemnm2s@v.shura.dev:31727?fp=ios&pbk=PbHGRi9KJXU3L0fOfml3AZbzdemDGzbYtoUdyuUTMS0&security=reality&sid=7168&sni=cdn.jsdelivr.net&spx=%2FeYQqoZpRI7w6ggh&type=tcp#v-trojan-studio";
 const VALID_NAIVE_URI = "naive+https://alice:secret@example.com:443?sni=edge.example.com#work";
 
 const runtime = mockRuntimeDependencies();
@@ -153,6 +155,38 @@ describe("sing-box config builder", () => {
         enabled: true,
         server_name: "x.shura.dev",
         alpn: ["h3"]
+      }
+    });
+  });
+
+  it("builds and writes a generated sing-box config for a trojan connection", async () => {
+    await addConnection("Trojan", VALID_TROJAN_URI);
+    await addProfile("Office");
+
+    const result = await buildAndWriteGeneratedConfig("Trojan", "Office");
+    const writtenConfig = JSON.parse(await readFile(result.configPath, "utf8")) as {
+      outbounds: Array<Record<string, unknown>>;
+    };
+
+    expect(writtenConfig.outbounds[0]).toEqual({
+      type: "trojan",
+      tag: "proxy",
+      server: "v.shura.dev",
+      server_port: 31727,
+      password: "ziw1fjdxrcemnm2s",
+      tls: {
+        enabled: true,
+        insecure: false,
+        server_name: "cdn.jsdelivr.net",
+        reality: {
+          enabled: true,
+          public_key: "PbHGRi9KJXU3L0fOfml3AZbzdemDGzbYtoUdyuUTMS0",
+          short_id: "7168"
+        },
+        utls: {
+          enabled: true,
+          fingerprint: "ios"
+        }
       }
     });
   });
