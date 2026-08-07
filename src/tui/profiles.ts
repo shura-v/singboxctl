@@ -124,11 +124,19 @@ async function runProfilesSetRuleSets(context: AppContext): Promise<void> {
       hint: ruleSet.rules.length > 0 ? `${ruleSet.rules.length} rules` : "No rules yet"
     })),
     "Choose rule sets for this profile",
-    profile.ruleSetNames
+    getAvailableRuleSetNames(profile.ruleSetNames, ruleSets)
   );
 
   await setProfileRuleSets(profileName, selectedRuleSets, context.service);
   log.success(
     `Profile "${profileName}" now uses ${selectedRuleSets.length} rule set${selectedRuleSets.length === 1 ? "" : "s"}.`
   );
+}
+
+export function getAvailableRuleSetNames(
+  selectedRuleSetNames: string[],
+  ruleSets: Array<{ name: string }>
+): string[] {
+  const availableRuleSetNames = new Set(ruleSets.map((ruleSet) => ruleSet.name));
+  return selectedRuleSetNames.filter((name) => availableRuleSetNames.has(name));
 }
