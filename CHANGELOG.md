@@ -1,5 +1,11 @@
 # singboxctl
 
+## 0.3.2
+
+### Patch Changes
+
+- 83f5669: Allow profiles with deleted rule sets to be saved again using their remaining rule sets.
+
 ## 0.3.1
 
 ### Patch Changes
