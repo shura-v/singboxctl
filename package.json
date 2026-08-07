@@ -9,7 +9,7 @@
     "node": ">=22.17"
   },
   "bin": {
-    "singboxctl": "./dist/index.js"
+    "singboxctl": "dist/index.js"
   },
   "files": [
     "dist"
