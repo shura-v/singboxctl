@@ -1,5 +1,11 @@
 # singboxctl
 
+## 0.4.0
+
+### Minor Changes
+
+- 257c97b: Add `singboxctl generate <profile> [output-path]` for non-interactive config generation.
+
 ## 0.3.2
 
 ### Patch Changes
