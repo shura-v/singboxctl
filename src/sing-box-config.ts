@@ -1,4 +1,5 @@
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { FriendlyMessageError } from "./cli.js";
 import {
   ensureDataDirectories,
@@ -74,11 +75,12 @@ export type GeneratedConfigResult = {
 export async function buildAndWriteGeneratedConfig(
   connectionName: string,
   profileName: string,
-  options: ConnectionGenerationOptions = {}
+  options: ConnectionGenerationOptions = {},
+  outputPath?: string
 ): Promise<GeneratedConfigResult> {
   const [connection, profile] = await Promise.all([getConnection(connectionName), getProfile(profileName)]);
   const config = await buildSingBoxConfig(connection, profile, options);
-  const configPath = await writeGeneratedConfig(config);
+  const configPath = await writeGeneratedConfig(config, outputPath);
   return { config, configPath };
 }
 
@@ -154,9 +156,10 @@ function buildTunAddresses(ipv6Enabled: boolean): string[] {
   return addresses;
 }
 
-export async function writeGeneratedConfig(config: SingBoxConfig): Promise<string> {
+export async function writeGeneratedConfig(config: SingBoxConfig, outputPath?: string): Promise<string> {
   await ensureDataDirectories();
-  const configPath = getGeneratedConfigPath();
+  const configPath = outputPath ?? getGeneratedConfigPath();
+  await mkdir(dirname(configPath), { recursive: true });
   await writeFile(configPath, JSON.stringify(config, null, 2) + "\n", "utf8");
   return configPath;
 }

@@ -125,6 +125,15 @@ Or start `sing-box` directly with the currently applied config:
 singboxctl connect
 ```
 
+Generate a config for a specific profile using the active connection:
+
+```bash
+singboxctl generate main
+singboxctl generate main ./artifacts/router-config.json
+```
+
+The optional output path creates missing parent directories. Generation requires the saved active connection and requested profile, but does not require the local `sing-box` runtime, change the active profile, or restart the service.
+
 If `sing-box` is not available yet, the app will show an error with installation hints.
 
 ## Current Menu
@@ -146,6 +155,7 @@ The current TUI includes:
 - `Rule Sets` store named groups of rules. The rule-set file name is the source of truth for the rule-set name.
 - `Profiles` select which rule sets should be active.
 - `Select connection and profile` validates the selected connection with the built-in URI parsers, writes a generated TUN config to `~/.config/singboxctl/config.json`, and refreshes the running service when needed.
+- `generate <profile> [output-path]` uses the active connection and writes the selected profile's config to the standard path or an explicit path without changing the active selection.
 - `Connect in terminal` starts `sing-box` in the foreground using the currently applied `~/.config/singboxctl/config.json` and prints logs in the current terminal. This is mainly useful for debugging.
 - `Logs` opens or clears `/var/log/singboxctl.log` and lets you change the `sing-box` log level.
 - `Auto-start in background` enables or disables running `sing-box` in the background now and on future startups.
