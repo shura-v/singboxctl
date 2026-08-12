@@ -1,5 +1,11 @@
 # singboxctl
 
+## 0.5.0
+
+### Minor Changes
+
+- f8f0ffa: Add Linux support with capability-based checks and systemd background service management.
+
 ## 0.4.0
 
 ### Minor Changes
