@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createMacOSAppContext } from "./platform/macos.js";
-import { createAppContext, ensureMacOS } from "./platform.js";
+import { createAppContext, ensureMacOS, ensureSupportedPlatform } from "./platform.js";
 
 describe("platform helpers", () => {
   const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
@@ -36,12 +36,23 @@ describe("platform helpers", () => {
 
   it("fails outside macOS", () => {
     Object.defineProperty(process, "platform", { value: "win32" });
-    expect(() => ensureMacOS()).toThrow("Platform not implemented yet: win32.");
+    expect(() => ensureSupportedPlatform()).toThrow("Platform not implemented yet: win32.");
   });
 
-  it("fails to create an app context for unsupported platforms", () => {
+  it("accepts Linux without distribution detection", () => {
     Object.defineProperty(process, "platform", { value: "linux" });
-    expect(() => createAppContext()).toThrow("Platform not implemented yet: linux.");
+
+    expect(() => ensureSupportedPlatform()).not.toThrow();
+    expect(createAppContext().service.getInfo()).toMatchObject({
+      definitionPath: "/etc/systemd/system/singboxctl.service",
+      label: "singboxctl.service"
+    });
+  });
+
+  it("keeps ensureMacOS restricted to macOS", () => {
+    Object.defineProperty(process, "platform", { value: "linux" });
+
+    expect(() => ensureMacOS()).toThrow("Platform not implemented yet: linux.");
   });
 
   afterAll(() => {

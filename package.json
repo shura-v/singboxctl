@@ -2,7 +2,7 @@
   "name": "singboxctl",
   "version": "0.4.0",
   "author": "Shura Vlasov",
-  "description": "Minimal CLI scaffold for sing-box on macOS.",
+  "description": "TUI for managing sing-box on macOS and Linux.",
   "license": "MIT",
   "type": "module",
   "engines": {
