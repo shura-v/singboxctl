@@ -14,7 +14,7 @@
 
 ## Current Limitations
 
-- macOS only
+- Supported operating systems: macOS and Linux
 - Connection import currently supports a narrow subset of these URI protocols:
   - `vless://`
   - `trojan://`
@@ -111,6 +111,19 @@ npm install -g singboxctl
 brew install sing-box
 ```
 
+### Linux
+
+- Install `sing-box` using its official package instructions: https://sing-box.sagernet.org/installation/package-manager/
+- Background service management requires a running systemd and `systemctl`.
+- Non-root service management requires `sudo`.
+- Opening files and directories requires `xdg-open`, usually provided by `xdg-utils`.
+
+`singboxctl` installs and manages its own `singboxctl.service` system service. If the package-provided service is active, disable it first to avoid competing TUN interfaces:
+
+```bash
+sudo systemctl disable --now sing-box
+```
+
 ## Run
 
 Start the TUI with:
@@ -157,5 +170,5 @@ The current TUI includes:
 - `Select connection and profile` validates the selected connection with the built-in URI parsers, writes a generated TUN config to `~/.config/singboxctl/config.json`, and refreshes the running service when needed.
 - `generate <profile> [output-path]` uses the active connection and writes the selected profile's config to the standard path or an explicit path without changing the active selection.
 - `Connect in terminal` starts `sing-box` in the foreground using the currently applied `~/.config/singboxctl/config.json` and prints logs in the current terminal. This is mainly useful for debugging.
-- `Logs` opens or clears `/var/log/singboxctl.log` and lets you change the `sing-box` log level.
+- `Logs` opens or clears `/var/log/singboxctl.log` and lets you change the `sing-box` log level. On Linux, the file opens through the default desktop application registered with `xdg-open`.
 - `Auto-start in background` enables or disables running `sing-box` in the background now and on future startups.
