@@ -19,6 +19,7 @@
   - `vless://`
   - `trojan://`
   - `hysteria2://`
+  - `tuic://`
   - `naive+https://`
   - `naive+quic://`
 - Supported rule formats are currently `domain:...`, `domain_suffix:...`, and `ip_cidr:...`
@@ -71,6 +72,21 @@ For Hysteria2 URIs, the auth value is read from the URI userinfo segment:
 Provider links in the wild may also include extra Hysteria2 parameters such as `fp`. Provider-link fields are documented separately from guaranteed generated `sing-box` runtime support: if a field is not listed above in the supported subset, do not assume it is applied to `config.json` just because it appears in a provider URI.
 
 Unsupported Hysteria2 features fail explicitly.
+
+#### TUIC
+
+Currently supported:
+
+- TUIC v5 userinfo `tuic://<uuid>:<password>@example.com:443?...`
+- optional `sni`
+- optional `alpn` (comma-separated)
+- optional `congestion_control=cubic|new_reno|bbr`
+- optional `udp_relay_mode=native|quic`
+- `allow_insecure=0` (insecure TLS is rejected)
+
+TLS is always enabled. TUIC requires sing-box 1.4.0 or newer.
+
+Unsupported TUIC features fail explicitly.
 
 #### Naive
 

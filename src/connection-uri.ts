@@ -15,10 +15,16 @@ import {
   validateTrojanConnectionUri,
   type TrojanOutbound
 } from "./trojan-uri/index.js";
+import { parseTuicUriToSingBoxOutbound, validateTuicConnectionUri, type TuicOutbound } from "./tuic-uri/index.js";
 import { parseVlessUriToSingBoxOutbound, validateVlessConnectionUri } from "./vless-uri/index.js";
 import type { VlessOutbound } from "./vless-uri/types.js";
 
-export type SupportedConnectionOutbound = Hysteria2Outbound | NaiveOutbound | TrojanOutbound | VlessOutbound;
+export type SupportedConnectionOutbound =
+  | Hysteria2Outbound
+  | NaiveOutbound
+  | TrojanOutbound
+  | TuicOutbound
+  | VlessOutbound;
 export type ConnectionGenerationOptions = {
   naiveUdpOverTcp?: boolean;
 };
@@ -36,6 +42,8 @@ export function parseConnectionUriToSingBoxOutbound(
       return parseTrojanUriToSingBoxOutbound(uri);
     case "hysteria2:":
       return parseHysteria2UriToSingBoxOutbound(uri);
+    case "tuic:":
+      return parseTuicUriToSingBoxOutbound(uri);
     case "naive+https:":
     case "naive+quic:":
       return withNaiveUdpOverTcp(parseNaiveUriToSingBoxOutbound(uri), options.naiveUdpOverTcp === true);
@@ -54,6 +62,8 @@ export function validateConnectionUri(uri: string): string[] {
       return validateTrojanConnectionUri(uri);
     case "hysteria2:":
       return validateHysteria2ConnectionUri(uri);
+    case "tuic:":
+      return validateTuicConnectionUri(uri);
     case "naive+https:":
     case "naive+quic:":
       return validateNaiveConnectionUri(uri);
