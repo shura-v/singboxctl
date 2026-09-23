@@ -1,5 +1,11 @@
 # singboxctl
 
+## 0.6.0
+
+### Minor Changes
+
+- 674d0cd: Add `tuic://` connection URI support.
+
 ## 0.5.0
 
 ### Minor Changes
